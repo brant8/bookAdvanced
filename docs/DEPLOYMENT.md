@@ -1,0 +1,100 @@
+# StoryVerse 部署指南
+
+## 一条命令启动
+
+```bash
+cp .env.example .env
+docker compose -p storyverse up -d --build
+```
+
+默认访问：
+
+- Web：`http://localhost:4311`
+- API 健康检查：`http://localhost:4311/api/health`
+- PostgreSQL 宿主机端口：`55432`
+
+端口均可在 `.env` 中修改。Compose 项目名固定为 `storyverse`，避免与同一主机上的
+其他项目共享容器、网络或数据卷名称。
+
+## NAS 部署
+
+适用于群晖 Container Manager、威联通 Container Station、TrueNAS SCALE 和普通
+Linux NAS。
+
+1. 将仓库放到 NAS 的应用目录。
+2. 复制 `.env.example` 为 `.env`。
+3. 设置绝对持久化目录和强数据库密码：
+
+```dotenv
+STORYVERSE_DATA_DIR=/volume1/docker/storyverse/postgres
+STORYVERSE_WEB_PORT=4311
+STORYVERSE_DB_PORT=55432
+STORYVERSE_DB_PASSWORD=请替换为长随机密码
+```
+
+4. 确保目录仅允许管理员和容器服务账号访问。
+5. 执行 `docker compose -p storyverse up -d --build`。
+
+镜像基于官方 Node.js 与 Nginx Alpine，支持常见的 `linux/amd64` 与
+`linux/arm64` NAS。
+
+## 公网访问
+
+默认建议仅在局域网访问。需要公网访问时：
+
+- 使用 NAS 自带反向代理、Caddy、Traefik 或 Nginx。
+- 只代理 Web 的 `4311` 端口，并配置 HTTPS 和访问控制。
+- 不向公网开放 PostgreSQL 的 `55432` 端口。
+- `/api` 已由 Web 容器代理到内部 API。
+
+## AI Provider
+
+AI 是可选功能；不配置模型时，全部非 AI 功能仍可使用。
+
+### 本地 Ollama
+
+在正文编辑器中填写：
+
+- 地址：`http://host.docker.internal:11434/v1`
+- 协议：`Chat Completions / Ollama`
+- 模型：已下载的本地模型名称
+
+Linux/NAS 若不支持 `host.docker.internal`，使用宿主机局域网 IP。
+
+### OpenAI 兼容服务
+
+填写服务的 `/v1` 基础地址、模型和 API Key。Key 只存在于当前页面内存，随单次请求
+发送给 StoryVerse API，不写入数据库、localStorage 或日志。OpenAI 官方 Responses
+API 可在协议下拉框中选择。
+
+## 备份与恢复
+
+项目设置页可创建事务快照并下载 JSON。完整数据库备份：
+
+```bash
+docker compose -p storyverse exec -T postgres \
+  pg_dump -U storyverse -d storyverse -Fc > storyverse.dump
+```
+
+恢复：
+
+```bash
+docker compose -p storyverse stop web api
+docker compose -p storyverse exec -T postgres \
+  pg_restore -U storyverse -d storyverse --clean --if-exists < storyverse.dump
+docker compose -p storyverse start api web
+```
+
+NAS 建议同时备份 PostgreSQL 持久化目录、`storyverse.dump` 和项目 JSON 快照，并至少
+保留一份不在同一块硬盘上的副本。
+
+## 升级与验收
+
+```bash
+git pull
+docker compose -p storyverse up -d --build
+npm run test:e2e
+```
+
+API 容器启动前会自动应用 migration。E2E 脚本通过 Web 入口完成健康检查、创建项目、
+创建故事线与节点、保存正文、导出 Markdown，并删除测试项目。

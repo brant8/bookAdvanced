@@ -1,0 +1,7 @@
+coverage/
+data/
+dist/
+node_modules/
+package-lock.json
+StoryVerse_Codex_Spec (2).md
+StoryVerse_PRD (1).md

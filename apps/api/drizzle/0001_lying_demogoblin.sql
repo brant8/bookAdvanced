@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "users_single_local_idx" ON "users" USING btree ("is_local") WHERE "users"."is_local" = true;

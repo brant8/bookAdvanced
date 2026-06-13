@@ -1,0 +1,31 @@
+{
+  "name": "@storyverse/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "db:check": "drizzle-kit check",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:smoke": "tsx src/db/smoke.ts",
+    "db:studio": "drizzle-kit studio",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "start:container": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.0.0",
+    "@storyverse/contracts": "*",
+    "dotenv": "^16.0.0",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.0.0",
+    "pg": "^8.0.0",
+    "tsx": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.0.0",
+    "drizzle-kit": "^0.31.0"
+  }
+}
