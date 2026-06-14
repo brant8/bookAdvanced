@@ -59,6 +59,19 @@ docker compose -p storyverse up -d --build
 核心功能不依赖付费服务。AI 可连接本地 Ollama，也可由用户自行提供 OpenAI 兼容
 服务的 API Key。
 
+## 持续集成
+
+`.github/workflows/ci.yml` 使用 GitHub Actions 免费托管 Runner，在推送到 `main`、
+Pull Request 和手动触发时执行：
+
+- 格式、Lint、TypeScript 与单元测试；
+- 全部 workspace 生产构建；
+- Docker Compose 配置校验；
+- PostgreSQL migration、回滚式 smoke test 与集成测试。
+
+工作流仅授予仓库内容读取权限，使用 npm 缓存并自动取消同一分支的旧运行，不上传构建
+制品或镜像，以减少免费额度和存储消耗。
+
 ## Project API
 
 API 启动时会幂等创建唯一的本地默认用户。当前项目接口：

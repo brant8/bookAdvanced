@@ -19,7 +19,7 @@ try {
   await db.transaction(async (tx) => {
     const [user] = await tx
       .insert(users)
-      .values({ displayName: 'Smoke Test User' })
+      .values({ displayName: 'Smoke Test User', isLocal: false })
       .returning({ id: users.id });
 
     if (!user) {

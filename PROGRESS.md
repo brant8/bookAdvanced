@@ -431,14 +431,73 @@
   - 未发现真实 API Key、私钥或其他敏感凭据。
   - 示例数据库密码仅用于本地开发，NAS/生产文档明确要求替换。
 
+### R-003 配置免费 CI
+
+- 状态：完成
+- 完成日期：2026-06-13
+- 变更：
+  - 新增 GitHub Actions 工作流，在 `main` 推送、Pull Request 和手动触发时运行。
+  - Quality Job 执行格式、Lint、TypeScript、单元测试、生产构建和 Compose 配置校验。
+  - Database Job 使用临时 PostgreSQL 17 Service，执行 migration、回滚式 smoke test 和集成测试。
+- 成本与安全：
+  - 使用 GitHub 托管 Runner 和 npm 缓存，不依赖付费第三方 CI。
+  - 同一分支的新运行会取消旧运行，减少免费分钟消耗。
+  - `GITHUB_TOKEN` 仅授予 `contents: read`，不上传制品、不构建或推送云镜像。
+- 本地验证：
+  - 工作流 YAML 已通过 Prettier 解析与格式检查。
+  - `npm run check`、`npm run build` 和 `docker compose config --quiet` 通过。
+  - PostgreSQL migration、smoke test 和 6 个集成测试通过。
+  - 修正 smoke test 用户与已有本地用户唯一约束冲突的问题，支持在空库和已有数据库重复运行。
+- 待线上确认：
+  - 仓库推送到 GitHub 后，需确认首次 Actions 运行状态和分支保护规则。
+
+### 本地 Docker 部署复验（NAS 前置）
+
+- 状态：完成
+- 完成日期：2026-06-13
+- 部署：
+  - 使用独立 Compose 项目 `storyverse` 构建并启动 Web、API 与 PostgreSQL。
+  - Web 使用宿主机端口 `4311`，PostgreSQL 使用 `55432`；API 仅在 Compose 网络内使用 `4310`。
+  - 启动前确认端口未被占用，未停止、重建或修改其他项目容器。
+- 验证：
+  - PostgreSQL 与 API 容器健康检查通过，Web 首页返回 HTTP 200，API 返回 `status: ok`。
+  - HTTP E2E 覆盖项目、故事线、节点、正文与导出并通过。
+  - E2E 数据已自动删除，数据库中项目和章节数量均为 0。
+  - 浏览器首页渲染正常，控制台无错误或警告。
+- 当前状态：
+  - 本地服务保持运行，可通过 `http://127.0.0.1:4311` 继续人工测试。
+  - 后续 NAS 部署沿用当前 Compose 与数据卷方案，并替换数据库密码及持久化目录。
+
+### UI 视觉系统重构
+
+- 状态：完成
+- 完成日期：2026-06-14
+- 设计依据：
+  - `StoryVerse_UI设计规范.md`
+  - `ChatGPT Image Jun 13, 2026, 08_30_40 PM.png`
+- 变更：
+  - 全局替换为“暗夜书房”深紫黑设计系统，统一颜色、边框、圆角、阴影、字体和交互状态。
+  - 首页新增品牌侧栏、创作定位和暗色项目卡片，保留原项目 CRUD 功能。
+  - 项目工作区重构为固定侧栏、顶部路径栏、内容区和底部连接状态栏。
+  - 为导航加入轻量内联 SVG 图标，不增加图标库或外部字体依赖。
+  - 仪表盘、故事线点阵画布、时间轴、正文编辑器及 AI 候选面板增加专属视觉样式。
+  - 响应式支持窄屏图标侧栏与 1440px 展开侧栏。
+- 成本与部署：
+  - 不依赖远程字体、付费 UI 套件或新增运行时服务，适合本地与 NAS 离线部署。
+- 验证：
+  - `npm run check`：11 个测试文件、19 个测试通过。
+  - 全部 workspace 生产构建成功。
+  - Docker Web 镜像重建并部署成功，API 与 PostgreSQL 保持健康。
+  - 首页、仪表盘、故事线和正文页面完成浏览器视觉验收，控制台无错误或警告。
+
 建议按以下顺序继续：
 
-1. **R-003：增加 CI**
-   - 在 GitHub Actions 或其他免费 CI 中执行 `npm run check`、`npm run build` 和 Compose 配置校验。
-2. **R-004：NAS 实机部署验收**
+1. **R-004：NAS 实机部署验收**
    - 在目标 NAS 上验证数据目录权限、反向代理、HTTPS 和定期数据库备份。
+2. **R-005：GitHub 远程仓库与分支保护**
+   - 推送现有提交，确认首次 CI 运行，并要求合并前通过 Quality 与 PostgreSQL integration。
 
-下一推荐任务：**R-003 免费 CI**；随后执行 **R-004 NAS 实机部署验收**。
+下一推荐任务：**R-004 NAS 实机部署验收**；如尚未准备 NAS，可先执行 **R-005 GitHub 远程仓库与分支保护**。
 
 ## 更新模板
 
