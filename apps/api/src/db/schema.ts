@@ -22,6 +22,33 @@ const timestamps = {
 
 export const projectVisibilityEnum = pgEnum('project_visibility', ['private', 'team']);
 export const aiModeEnum = pgEnum('ai_mode', ['manual', 'suggest']);
+export const userRoleEnum = pgEnum('user_role', ['owner']);
+export const aiProviderKindEnum = pgEnum('ai_provider_kind', ['text', 'image']);
+export const generationStatusEnum = pgEnum('generation_status', [
+  'pending',
+  'running',
+  'completed',
+  'approved',
+  'rejected',
+  'failed',
+]);
+export const storyEdgeTypeEnum = pgEnum('story_edge_type', [
+  'flow',
+  'branch',
+  'parallel',
+  'causal',
+  'foreshadow',
+  'reveal',
+]);
+export const assetKindEnum = pgEnum('asset_kind', [
+  'character',
+  'scene',
+  'background',
+  'prop',
+  'reference',
+]);
+export const assetSourceEnum = pgEnum('asset_source', ['upload', 'generated']);
+export const storyboardStatusEnum = pgEnum('storyboard_status', ['draft', 'ready']);
 export const storylineTypeEnum = pgEnum('storyline_type', ['main', 'sub']);
 export const storylinePacingEnum = pgEnum('storyline_pacing', [
   'slow',
@@ -60,6 +87,8 @@ export const users = pgTable(
     email: text('email').unique(),
     displayName: text('display_name').notNull().default('本地创作者'),
     isLocal: boolean('is_local').notNull().default(true),
+    passwordHash: text('password_hash'),
+    role: userRoleEnum('role').notNull().default('owner'),
     ...timestamps,
   },
   (table) => [
@@ -67,6 +96,20 @@ export const users = pgTable(
       .on(table.isLocal)
       .where(sql`${table.isLocal} = true`),
   ],
+);
+
+export const userSessions = pgTable(
+  'user_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { mode: 'date', withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('user_sessions_user_id_idx').on(table.userId)],
 );
 
 export const projects = pgTable(
@@ -296,6 +339,176 @@ export const storyNodes = pgTable(
     uniqueIndex('story_nodes_storyline_order_idx').on(table.storylineId, table.sortOrder),
     check('story_nodes_sort_order_nonnegative', sql`${table.sortOrder} >= 0`),
   ],
+);
+
+export const storyNodeEdges = pgTable(
+  'story_node_edges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    sourceNodeId: uuid('source_node_id')
+      .notNull()
+      .references(() => storyNodes.id, { onDelete: 'cascade' }),
+    targetNodeId: uuid('target_node_id')
+      .notNull()
+      .references(() => storyNodes.id, { onDelete: 'cascade' }),
+    type: storyEdgeTypeEnum('type').notNull().default('flow'),
+    label: text('label').notNull().default(''),
+    condition: text('condition').notNull().default(''),
+    ...timestamps,
+  },
+  (table) => [
+    index('story_node_edges_project_id_idx').on(table.projectId),
+    uniqueIndex('story_node_edges_unique_idx').on(
+      table.sourceNodeId,
+      table.targetNodeId,
+      table.type,
+    ),
+    check('story_node_edges_not_self', sql`${table.sourceNodeId} <> ${table.targetNodeId}`),
+  ],
+);
+
+export const aiProviders = pgTable(
+  'ai_providers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: aiProviderKindEnum('kind').notNull(),
+    protocol: text('protocol').notNull(),
+    baseUrl: text('base_url').notNull(),
+    defaultModel: text('default_model').notNull(),
+    models: jsonb('models').$type<string[]>().notNull().default([]),
+    encryptedApiKey: text('encrypted_api_key'),
+    enabled: boolean('enabled').notNull().default(true),
+    ...timestamps,
+  },
+  (table) => [
+    index('ai_providers_owner_id_idx').on(table.ownerId),
+    uniqueIndex('ai_providers_owner_name_idx').on(table.ownerId, table.name),
+  ],
+);
+
+export const generationRuns = pgTable(
+  'generation_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+    providerId: uuid('provider_id').references(() => aiProviders.id, { onDelete: 'set null' }),
+    taskType: text('task_type').notNull(),
+    status: generationStatusEnum('status').notNull().default('pending'),
+    input: jsonb('input').$type<Record<string, unknown>>().notNull().default({}),
+    output: jsonb('output').$type<Record<string, unknown> | null>(),
+    error: text('error'),
+    startedAt: timestamp('started_at', { mode: 'date', withTimezone: true }),
+    completedAt: timestamp('completed_at', { mode: 'date', withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('generation_runs_owner_id_idx').on(table.ownerId),
+    index('generation_runs_project_id_idx').on(table.projectId),
+  ],
+);
+
+export const scenes = pgTable(
+  'scenes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    storyNodeId: uuid('story_node_id')
+      .notNull()
+      .unique()
+      .references(() => storyNodes.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    location: text('location').notNull().default(''),
+    timeOfDay: text('time_of_day').notNull().default(''),
+    weather: text('weather').notNull().default(''),
+    atmosphere: text('atmosphere').notNull().default(''),
+    visualPrompt: text('visual_prompt').notNull().default(''),
+    ...timestamps,
+  },
+  (table) => [index('scenes_project_id_idx').on(table.projectId)],
+);
+
+export const characterAbilities = pgTable(
+  'character_abilities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    level: integer('level').notNull().default(1),
+    ...timestamps,
+  },
+  (table) => [
+    index('character_abilities_project_id_idx').on(table.projectId),
+    uniqueIndex('character_abilities_name_idx').on(table.characterId, table.name),
+  ],
+);
+
+export const assets = pgTable(
+  'assets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    kind: assetKindEnum('kind').notNull().default('reference'),
+    source: assetSourceEnum('source').notNull(),
+    name: text('name').notNull(),
+    fileName: text('file_name').notNull(),
+    mimeType: text('mime_type').notNull(),
+    storagePath: text('storage_path').notNull(),
+    prompt: text('prompt').notNull().default(''),
+    characterId: uuid('character_id').references(() => characters.id, { onDelete: 'set null' }),
+    storyNodeId: uuid('story_node_id').references(() => storyNodes.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (table) => [index('assets_project_id_idx').on(table.projectId)],
+);
+
+export const storyboards = pgTable('storyboards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id')
+    .notNull()
+    .unique()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  title: text('title').notNull().default('故事分镜'),
+  status: storyboardStatusEnum('status').notNull().default('draft'),
+  ...timestamps,
+});
+
+export const storyboardShots = pgTable(
+  'storyboard_shots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    storyboardId: uuid('storyboard_id')
+      .notNull()
+      .references(() => storyboards.id, { onDelete: 'cascade' }),
+    storyNodeId: uuid('story_node_id').references(() => storyNodes.id, { onDelete: 'set null' }),
+    assetId: uuid('asset_id').references(() => assets.id, { onDelete: 'set null' }),
+    sortOrder: integer('sort_order').notNull(),
+    title: text('title').notNull(),
+    narration: text('narration').notNull().default(''),
+    visualPrompt: text('visual_prompt').notNull().default(''),
+    durationMs: integer('duration_ms').notNull().default(4000),
+    transition: text('transition').notNull().default('fade'),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex('storyboard_shots_order_idx').on(table.storyboardId, table.sortOrder)],
 );
 
 export const chapters = pgTable(

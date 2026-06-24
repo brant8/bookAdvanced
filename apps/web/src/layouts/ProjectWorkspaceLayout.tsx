@@ -12,6 +12,8 @@ const navigation = [
   ['时间轴', 'timeline', 'timeline'],
   ['正文', 'write', 'edit'],
   ['伏笔与灵感', 'notes', 'spark'],
+  ['视觉素材', 'assets', 'grid'],
+  ['分镜播放', 'storyboard', 'timeline'],
   ['设置', 'settings', 'settings'],
 ] as const;
 

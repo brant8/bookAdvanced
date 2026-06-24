@@ -3,6 +3,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import type {
   Character,
   CharacterRelation,
+  CreateStoryNodeEdgeInput,
   CreateCharacterInput,
   CreateCharacterRelationInput,
   CreateLoreEntryInput,
@@ -15,12 +16,14 @@ import type {
   Storyline,
   StorylineMilestone,
   StoryNode,
+  StoryNodeEdge,
   UpdateCharacterInput,
   UpdateCharacterRelationInput,
   UpdateLoreEntryInput,
   UpdateStorylineInput,
   UpdateStorylineMilestoneInput,
   UpdateStoryNodeInput,
+  UpdateStoryNodeEdgeInput,
   UpdateWorldRuleInput,
   UpsertStoryBibleInput,
   WorldRule,
@@ -36,6 +39,7 @@ import {
   storylineMilestones,
   storylines,
   storyNodeCharacters,
+  storyNodeEdges,
   storyNodeLoreEntries,
   storyNodes,
   worldRules,
@@ -403,6 +407,59 @@ export class CreativeService {
     const row = await this.findStoryNode(id);
     await this.assertProject(row.projectId);
     await this.db.delete(storyNodes).where(eq(storyNodes.id, id));
+  }
+
+  async listStoryNodeEdges(projectId: string): Promise<StoryNodeEdge[]> {
+    await this.assertProject(projectId);
+    const rows = await this.db
+      .select()
+      .from(storyNodeEdges)
+      .where(eq(storyNodeEdges.projectId, projectId))
+      .orderBy(asc(storyNodeEdges.createdAt));
+    return rows.map((row) => dto<StoryNodeEdge>(row));
+  }
+
+  async createStoryNodeEdge(
+    projectId: string,
+    input: CreateStoryNodeEdgeInput,
+  ): Promise<StoryNodeEdge> {
+    await this.assertProject(projectId);
+    if (input.sourceNodeId === input.targetNodeId) {
+      throw new CreativeResourceConflictError('A story node cannot connect to itself.');
+    }
+    const [source, target] = await Promise.all([
+      this.findStoryNode(input.sourceNodeId),
+      this.findStoryNode(input.targetNodeId),
+    ]);
+    if (source.projectId !== projectId || target.projectId !== projectId) {
+      throw new CreativeResourceNotFoundError();
+    }
+    const [row] = await this.db
+      .insert(storyNodeEdges)
+      .values({ ...input, projectId })
+      .returning();
+    return dto<StoryNodeEdge>(required(row));
+  }
+
+  async updateStoryNodeEdge(id: string, input: UpdateStoryNodeEdgeInput): Promise<StoryNodeEdge> {
+    const edge = required(
+      (await this.db.select().from(storyNodeEdges).where(eq(storyNodeEdges.id, id)).limit(1))[0],
+    );
+    await this.assertProject(edge.projectId);
+    const [row] = await this.db
+      .update(storyNodeEdges)
+      .set({ ...input, updatedAt: new Date() })
+      .where(eq(storyNodeEdges.id, id))
+      .returning();
+    return dto<StoryNodeEdge>(required(row));
+  }
+
+  async deleteStoryNodeEdge(id: string): Promise<void> {
+    const edge = required(
+      (await this.db.select().from(storyNodeEdges).where(eq(storyNodeEdges.id, id)).limit(1))[0],
+    );
+    await this.assertProject(edge.projectId);
+    await this.db.delete(storyNodeEdges).where(eq(storyNodeEdges.id, id));
   }
 
   private async assertProject(projectId: string): Promise<void> {

@@ -1,0 +1,430 @@
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+
+import { and, asc, eq } from 'drizzle-orm';
+
+import type {
+  Asset,
+  CharacterAbility,
+  CreateCharacterAbilityInput,
+  GenerateImageInput,
+  Scene,
+  Storyboard,
+  UpsertSceneInput,
+} from '@storyverse/contracts';
+
+import type { Database } from '../../db/client.js';
+import {
+  aiProviders,
+  assets,
+  characterAbilities,
+  characters,
+  generationRuns,
+  projects,
+  scenes,
+  storyboardShots,
+  storyboards,
+  storyNodes,
+} from '../../db/schema.js';
+import type { AiSettingsService } from '../ai-settings/ai-settings.service.js';
+import { decryptSecret } from '../ai-settings/secret-box.js';
+import type { TextGenerationProvider } from '../ai/ai.provider.js';
+import { CreativeResourceNotFoundError } from '../creative/creative.service.js';
+
+export class VisualService {
+  constructor(
+    private readonly db: Database,
+    private readonly ownerId: string,
+    private readonly settings?: AiSettingsService,
+    private readonly textProvider?: TextGenerationProvider,
+    private readonly uploadDir = process.env.STORYVERSE_UPLOAD_DIR ??
+      path.resolve('data', 'uploads'),
+  ) {}
+
+  async getScene(nodeId: string): Promise<Scene | null> {
+    await this.ownedNode(nodeId);
+    const [row] = await this.db
+      .select()
+      .from(scenes)
+      .where(eq(scenes.storyNodeId, nodeId))
+      .limit(1);
+    return row ? dto(row) : null;
+  }
+
+  async upsertScene(nodeId: string, input: UpsertSceneInput): Promise<Scene> {
+    const node = await this.ownedNode(nodeId);
+    const [row] = await this.db
+      .insert(scenes)
+      .values({ ...input, projectId: node.projectId, storyNodeId: nodeId })
+      .onConflictDoUpdate({
+        target: scenes.storyNodeId,
+        set: { ...input, updatedAt: new Date() },
+      })
+      .returning();
+    return dto(required(row));
+  }
+
+  async listAbilities(projectId: string): Promise<CharacterAbility[]> {
+    await this.assertProject(projectId);
+    return dto(
+      await this.db
+        .select()
+        .from(characterAbilities)
+        .where(eq(characterAbilities.projectId, projectId))
+        .orderBy(asc(characterAbilities.name)),
+    );
+  }
+
+  async createAbility(
+    projectId: string,
+    input: CreateCharacterAbilityInput,
+  ): Promise<CharacterAbility> {
+    await this.assertProject(projectId);
+    const [character] = await this.db
+      .select()
+      .from(characters)
+      .where(and(eq(characters.id, input.characterId), eq(characters.projectId, projectId)))
+      .limit(1);
+    if (!character) throw new CreativeResourceNotFoundError();
+    const [row] = await this.db
+      .insert(characterAbilities)
+      .values({ ...input, projectId })
+      .returning();
+    return dto(required(row));
+  }
+
+  async listAssets(projectId: string): Promise<Asset[]> {
+    await this.assertProject(projectId);
+    const rows = await this.db
+      .select()
+      .from(assets)
+      .where(eq(assets.projectId, projectId))
+      .orderBy(asc(assets.createdAt));
+    return rows.map(assetDto);
+  }
+
+  async upload(
+    projectId: string,
+    file: File,
+    metadata: { name: string; kind: Asset['kind']; characterId?: string; storyNodeId?: string },
+  ): Promise<Asset> {
+    await this.assertProject(projectId);
+    await mkdir(this.uploadDir, { recursive: true });
+    const extension = safeExtension(file.name, file.type);
+    const fileName = `${randomUUID()}${extension}`;
+    const storagePath = path.join(this.uploadDir, fileName);
+    await writeFile(storagePath, Buffer.from(await file.arrayBuffer()));
+    const [row] = await this.db
+      .insert(assets)
+      .values({
+        ...metadata,
+        fileName,
+        mimeType: file.type || 'application/octet-stream',
+        projectId,
+        source: 'upload',
+        storagePath,
+      })
+      .returning();
+    return assetDto(required(row));
+  }
+
+  async generateImage(projectId: string, input: GenerateImageInput): Promise<Asset> {
+    await this.assertProject(projectId);
+    const [provider] = await this.db
+      .select()
+      .from(aiProviders)
+      .where(
+        and(
+          eq(aiProviders.id, input.providerId),
+          eq(aiProviders.ownerId, this.ownerId),
+          eq(aiProviders.kind, 'image'),
+        ),
+      )
+      .limit(1);
+    if (!provider) throw new CreativeResourceNotFoundError();
+    const [run] = await this.db
+      .insert(generationRuns)
+      .values({
+        input: { kind: input.kind, prompt: input.prompt, size: input.size },
+        ownerId: this.ownerId,
+        projectId,
+        providerId: input.providerId,
+        startedAt: new Date(),
+        status: 'running',
+        taskType: 'image.generate',
+      })
+      .returning({ id: generationRuns.id });
+    try {
+      const baseUrl = provider.baseUrl.replace(/\/+$/, '');
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      if (provider.encryptedApiKey) {
+        headers.authorization = `Bearer ${decryptSecret(provider.encryptedApiKey)}`;
+      }
+      const response = await fetch(`${baseUrl}/images/generations`, {
+        body: JSON.stringify({
+          model: provider.defaultModel,
+          prompt: input.prompt,
+          response_format: 'b64_json',
+          size: input.size,
+        }),
+        headers,
+        method: 'POST',
+        signal: AbortSignal.timeout(300_000),
+      });
+      if (!response.ok) throw new Error(`Image Provider returned ${response.status}.`);
+      const payload = (await response.json()) as {
+        data?: { b64_json?: string; url?: string }[];
+      };
+      const first = payload.data?.[0];
+      let bytes: Buffer;
+      let mimeType = 'image/png';
+      if (first?.b64_json) {
+        bytes = Buffer.from(first.b64_json, 'base64');
+      } else if (first?.url) {
+        const image = await fetch(first.url);
+        if (!image.ok) throw new Error('Could not download generated image.');
+        mimeType = image.headers.get('content-type') ?? mimeType;
+        bytes = Buffer.from(await image.arrayBuffer());
+      } else {
+        throw new Error('Image Provider did not return image data.');
+      }
+      await mkdir(this.uploadDir, { recursive: true });
+      const fileName = `${randomUUID()}.${mimeType.includes('jpeg') ? 'jpg' : 'png'}`;
+      const storagePath = path.join(this.uploadDir, fileName);
+      await writeFile(storagePath, bytes);
+      const [row] = await this.db
+        .insert(assets)
+        .values({
+          characterId: input.characterId,
+          fileName,
+          kind: input.kind,
+          mimeType,
+          name: input.name,
+          projectId,
+          prompt: input.prompt,
+          source: 'generated',
+          storagePath,
+          storyNodeId: input.storyNodeId,
+        })
+        .returning();
+      const result = assetDto(required(row));
+      if (run) {
+        await this.db
+          .update(generationRuns)
+          .set({
+            completedAt: new Date(),
+            output: { assetId: result.id },
+            status: 'completed',
+            updatedAt: new Date(),
+          })
+          .where(eq(generationRuns.id, run.id));
+      }
+      return result;
+    } catch (cause) {
+      if (run) {
+        await this.db
+          .update(generationRuns)
+          .set({
+            completedAt: new Date(),
+            error: cause instanceof Error ? cause.message : 'Image generation failed.',
+            status: 'failed',
+            updatedAt: new Date(),
+          })
+          .where(eq(generationRuns.id, run.id));
+      }
+      throw cause;
+    }
+  }
+
+  async deleteAsset(id: string) {
+    const [row] = await this.db.select().from(assets).where(eq(assets.id, id)).limit(1);
+    if (!row) throw new CreativeResourceNotFoundError();
+    await this.assertProject(row.projectId);
+    await this.db.delete(assets).where(eq(assets.id, id));
+    await unlink(row.storagePath).catch(() => undefined);
+  }
+
+  async file(id: string) {
+    const [row] = await this.db.select().from(assets).where(eq(assets.id, id)).limit(1);
+    if (!row) throw new CreativeResourceNotFoundError();
+    await this.assertProject(row.projectId);
+    return { bytes: await readFile(row.storagePath), mimeType: row.mimeType };
+  }
+
+  async generateStoryboard(projectId: string, providerId?: string): Promise<Storyboard> {
+    await this.assertProject(projectId);
+    const nodes = await this.db
+      .select()
+      .from(storyNodes)
+      .where(eq(storyNodes.projectId, projectId))
+      .orderBy(asc(storyNodes.sortOrder));
+    let shotDrafts: {
+      durationMs: number;
+      narration: string;
+      sortOrder: number;
+      storyNodeId: string | null;
+      title: string;
+      transition: string;
+      visualPrompt: string;
+    }[] = nodes.map((node, index) => ({
+      durationMs: 3500,
+      narration: node.summary || node.nodeGoal,
+      sortOrder: index,
+      storyNodeId: node.id,
+      title: node.title,
+      transition: index % 2 === 0 ? 'fade' : 'pan',
+      visualPrompt: node.description || node.summary || node.title,
+    }));
+    if (providerId && this.settings && this.textProvider && nodes.length) {
+      const config = await this.settings.providerConfig(providerId);
+      const [run] = await this.db
+        .insert(generationRuns)
+        .values({
+          input: { nodeCount: nodes.length },
+          ownerId: this.ownerId,
+          projectId,
+          providerId,
+          startedAt: new Date(),
+          status: 'running',
+          taskType: 'storyboard.generate',
+        })
+        .returning({ id: generationRuns.id });
+      try {
+        const output = await this.textProvider.generate(
+          config,
+          [
+            '你是小说分镜导演。只输出 JSON 数组，不要 Markdown。',
+            '每个镜头包含 title、narration、visualPrompt、durationMs、transition。',
+            'transition 只能是 fade 或 pan，durationMs 在 2000 到 8000 之间。',
+            JSON.stringify(
+              nodes.map(({ id, title, summary, description }) => ({
+                id,
+                title,
+                summary,
+                description,
+              })),
+            ),
+          ].join('\n\n'),
+        );
+        const generated = parseShotDrafts(output);
+        shotDrafts = generated.map((shot, index) => ({
+          ...shot,
+          sortOrder: index,
+          storyNodeId: nodes[index]?.id ?? null,
+        }));
+        if (run) {
+          await this.db
+            .update(generationRuns)
+            .set({
+              completedAt: new Date(),
+              output: { shots: generated },
+              status: 'completed',
+              updatedAt: new Date(),
+            })
+            .where(eq(generationRuns.id, run.id));
+        }
+      } catch (cause) {
+        if (run) {
+          await this.db
+            .update(generationRuns)
+            .set({
+              completedAt: new Date(),
+              error: cause instanceof Error ? cause.message : 'Storyboard generation failed.',
+              status: 'failed',
+              updatedAt: new Date(),
+            })
+            .where(eq(generationRuns.id, run.id));
+        }
+        throw cause;
+      }
+    }
+    const [board] = await this.db
+      .insert(storyboards)
+      .values({ projectId, status: 'ready', title: 'AI 故事分镜' })
+      .onConflictDoUpdate({
+        target: storyboards.projectId,
+        set: { status: 'ready', updatedAt: new Date() },
+      })
+      .returning();
+    const storyboard = required(board);
+    await this.db.delete(storyboardShots).where(eq(storyboardShots.storyboardId, storyboard.id));
+    if (nodes.length) {
+      await this.db
+        .insert(storyboardShots)
+        .values(shotDrafts.map((shot) => ({ ...shot, storyboardId: storyboard.id })));
+    }
+    return this.getStoryboard(projectId) as Promise<Storyboard>;
+  }
+
+  async getStoryboard(projectId: string): Promise<Storyboard | null> {
+    await this.assertProject(projectId);
+    const [board] = await this.db
+      .select()
+      .from(storyboards)
+      .where(eq(storyboards.projectId, projectId))
+      .limit(1);
+    if (!board) return null;
+    const shots = await this.db
+      .select()
+      .from(storyboardShots)
+      .where(eq(storyboardShots.storyboardId, board.id))
+      .orderBy(asc(storyboardShots.sortOrder));
+    return dto({ ...board, shots });
+  }
+
+  private async ownedNode(nodeId: string) {
+    const [node] = await this.db
+      .select()
+      .from(storyNodes)
+      .where(eq(storyNodes.id, nodeId))
+      .limit(1);
+    if (!node) throw new CreativeResourceNotFoundError();
+    await this.assertProject(node.projectId);
+    return node;
+  }
+
+  private async assertProject(projectId: string) {
+    const [project] = await this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.ownerId, this.ownerId)))
+      .limit(1);
+    if (!project) throw new CreativeResourceNotFoundError();
+  }
+}
+
+function assetDto(row: typeof assets.$inferSelect): Asset {
+  return dto({ ...row, url: `/api/assets/${row.id}/file` });
+}
+function required<T>(value: T | undefined): T {
+  if (!value) throw new CreativeResourceNotFoundError();
+  return value;
+}
+function dto<T>(value: unknown): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+function safeExtension(name: string, mimeType: string) {
+  const extension = path.extname(name).toLowerCase();
+  if (/^\.[a-z0-9]{1,8}$/.test(extension)) return extension;
+  return mimeType.includes('jpeg') ? '.jpg' : mimeType.includes('png') ? '.png' : '.bin';
+}
+
+function parseShotDrafts(value: string) {
+  const clean = value
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '');
+  const parsed: unknown = JSON.parse(clean);
+  if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('AI storyboard is empty.');
+  return parsed.map((item) => {
+    const shot = item as Record<string, unknown>;
+    return {
+      durationMs: Math.max(2000, Math.min(8000, Number(shot.durationMs) || 3500)),
+      narration: String(shot.narration ?? ''),
+      title: String(shot.title ?? '未命名镜头'),
+      transition: shot.transition === 'pan' ? 'pan' : 'fade',
+      visualPrompt: String(shot.visualPrompt ?? ''),
+    };
+  });
+}

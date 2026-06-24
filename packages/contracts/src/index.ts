@@ -4,6 +4,10 @@ export * from './projects';
 export * from './creative';
 export * from './workspace';
 export * from './ai';
+export * from './ai-settings';
+export * from './auth';
+export * from './creative-generation';
+export * from './visual';
 
 export const healthResponseSchema = z.object({
   service: z.literal('storyverse-api'),

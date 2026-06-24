@@ -212,6 +212,35 @@ export const createStoryNodeSchema = z.object({
 });
 export const updateStoryNodeSchema = createStoryNodeSchema.partial();
 
+export const storyEdgeTypeSchema = z.enum([
+  'flow',
+  'branch',
+  'parallel',
+  'causal',
+  'foreshadow',
+  'reveal',
+]);
+export const storyNodeEdgeSchema = z.object({
+  id,
+  projectId: id,
+  sourceNodeId: id,
+  targetNodeId: id,
+  type: storyEdgeTypeSchema,
+  label: z.string(),
+  condition: z.string(),
+  ...timestamps,
+});
+export const createStoryNodeEdgeSchema = z.object({
+  sourceNodeId: id,
+  targetNodeId: id,
+  type: storyEdgeTypeSchema.optional(),
+  label: z.string().max(160).optional(),
+  condition: z.string().max(10_000).optional(),
+});
+export const updateStoryNodeEdgeSchema = createStoryNodeEdgeSchema
+  .omit({ sourceNodeId: true, targetNodeId: true })
+  .partial();
+
 export type StoryBible = z.infer<typeof storyBibleSchema>;
 export type UpsertStoryBibleInput = z.infer<typeof upsertStoryBibleSchema>;
 export type WorldRule = z.infer<typeof worldRuleSchema>;
@@ -235,3 +264,6 @@ export type UpdateStorylineMilestoneInput = z.infer<typeof updateStorylineMilest
 export type StoryNode = z.infer<typeof storyNodeSchema>;
 export type CreateStoryNodeInput = z.infer<typeof createStoryNodeSchema>;
 export type UpdateStoryNodeInput = z.infer<typeof updateStoryNodeSchema>;
+export type StoryNodeEdge = z.infer<typeof storyNodeEdgeSchema>;
+export type CreateStoryNodeEdgeInput = z.infer<typeof createStoryNodeEdgeSchema>;
+export type UpdateStoryNodeEdgeInput = z.infer<typeof updateStoryNodeEdgeSchema>;

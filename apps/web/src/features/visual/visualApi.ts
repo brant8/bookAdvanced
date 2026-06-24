@@ -1,0 +1,67 @@
+import {
+  assetSchema,
+  characterAbilitySchema,
+  sceneSchema,
+  storyboardSchema,
+  type CreateCharacterAbilityInput,
+  type GenerateImageInput,
+  type UpsertSceneInput,
+} from '@storyverse/contracts';
+
+import { apiRequest } from '../../lib/api';
+
+const list = <T>(schema: { parse(value: unknown): T }, value: unknown) =>
+  (value as unknown[]).map((item) => schema.parse(item));
+
+export const visualApi = {
+  getScene: async (nodeId: string) => {
+    const value = await apiRequest(`/story-nodes/${nodeId}/scene`);
+    return value === null ? null : sceneSchema.parse(value);
+  },
+  saveScene: async (nodeId: string, input: UpsertSceneInput) =>
+    sceneSchema.parse(
+      await apiRequest(`/story-nodes/${nodeId}/scene`, {
+        body: JSON.stringify(input),
+        method: 'PUT',
+      }),
+    ),
+  listAbilities: async (projectId: string) =>
+    list(characterAbilitySchema, await apiRequest(`/projects/${projectId}/abilities`)),
+  createAbility: async (projectId: string, input: CreateCharacterAbilityInput) =>
+    characterAbilitySchema.parse(
+      await apiRequest(`/projects/${projectId}/abilities`, {
+        body: JSON.stringify(input),
+        method: 'POST',
+      }),
+    ),
+  listAssets: async (projectId: string) =>
+    list(assetSchema, await apiRequest(`/projects/${projectId}/assets`)),
+  uploadAsset: async (projectId: string, file: File, name: string, kind: string) => {
+    const form = new FormData();
+    form.set('file', file);
+    form.set('name', name);
+    form.set('kind', kind);
+    return assetSchema.parse(
+      await apiRequest(`/projects/${projectId}/assets/upload`, { body: form, method: 'POST' }),
+    );
+  },
+  generateImage: async (projectId: string, input: GenerateImageInput) =>
+    assetSchema.parse(
+      await apiRequest(`/projects/${projectId}/assets/generate`, {
+        body: JSON.stringify(input),
+        method: 'POST',
+      }),
+    ),
+  deleteAsset: (id: string) => apiRequest(`/assets/${id}`, { method: 'DELETE' }),
+  getStoryboard: async (projectId: string) => {
+    const value = await apiRequest(`/projects/${projectId}/storyboard`);
+    return value === null ? null : storyboardSchema.parse(value);
+  },
+  generateStoryboard: async (projectId: string, providerId?: string) =>
+    storyboardSchema.parse(
+      await apiRequest(`/projects/${projectId}/storyboard/generate`, {
+        body: JSON.stringify({ providerId }),
+        method: 'POST',
+      }),
+    ),
+};

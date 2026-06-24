@@ -27,13 +27,18 @@ Linux NAS。
 
 ```dotenv
 STORYVERSE_DATA_DIR=/volume1/docker/storyverse/postgres
+STORYVERSE_UPLOAD_DIR=/volume1/docker/storyverse/uploads
 STORYVERSE_WEB_PORT=4311
 STORYVERSE_DB_PORT=55432
 STORYVERSE_DB_PASSWORD=请替换为长随机密码
+STORYVERSE_AUTH_MODE=account
+STORYVERSE_SECRET_KEY=请替换为至少32位的长随机密钥
+STORYVERSE_GENERATION_TIMEOUT_MS=600000
 ```
 
-4. 确保目录仅允许管理员和容器服务账号访问。
-5. 执行 `docker compose -p storyverse up -d --build`。
+4. 执行 `npm run ops:preflight`，确认没有阻断性安全配置问题。
+5. 确保目录仅允许管理员和容器服务账号访问。
+6. 执行 `docker compose -p storyverse up -d --build`。
 
 镜像基于官方 Node.js 与 Nginx Alpine，支持常见的 `linux/amd64` 与
 `linux/arm64` NAS。
@@ -46,6 +51,9 @@ STORYVERSE_DB_PASSWORD=请替换为长随机密码
 - 只代理 Web 的 `4311` 端口，并配置 HTTPS 和访问控制。
 - 不向公网开放 PostgreSQL 的 `55432` 端口。
 - `/api` 已由 Web 容器代理到内部 API。
+- 公网或跨设备访问时必须启用 `STORYVERSE_AUTH_MODE=account`。
+- 账号模式下 `STORYVERSE_SECRET_KEY` 不得使用示例值；它用于加密已保存的 AI Key。
+- `STORYVERSE_DATA_DIR` 与 `STORYVERSE_UPLOAD_DIR` 都应位于 NAS 持久化目录，并纳入备份。
 
 ## AI Provider
 
@@ -53,7 +61,7 @@ AI 是可选功能；不配置模型时，全部非 AI 功能仍可使用。
 
 ### 本地 Ollama
 
-在正文编辑器中填写：
+在“项目与 AI 设置”中新增文本 Provider：
 
 - 地址：`http://host.docker.internal:11434/v1`
 - 协议：`Chat Completions / Ollama`
@@ -63,9 +71,11 @@ Linux/NAS 若不支持 `host.docker.internal`，使用宿主机局域网 IP。
 
 ### OpenAI 兼容服务
 
-填写服务的 `/v1` 基础地址、模型和 API Key。Key 只存在于当前页面内存，随单次请求
-发送给 StoryVerse API，不写入数据库、localStorage 或日志。OpenAI 官方 Responses
-API 可在协议下拉框中选择。
+填写服务的 `/v1` 基础地址、模型和 API Key。Key 会使用 `STORYVERSE_SECRET_KEY`
+在服务端加密保存；浏览器只会看到“已配置 Key”，不会读取明文。
+
+图片模型请新增“图片模型”类型的 Provider。StoryVerse 会把生成结果下载到
+`STORYVERSE_UPLOAD_DIR`，避免长期依赖第三方临时 URL。
 
 ## 备份与恢复
 
@@ -85,8 +95,16 @@ docker compose -p storyverse exec -T postgres \
 docker compose -p storyverse start api web
 ```
 
-NAS 建议同时备份 PostgreSQL 持久化目录、`storyverse.dump` 和项目 JSON 快照，并至少
-保留一份不在同一块硬盘上的副本。
+NAS 建议同时备份 PostgreSQL 持久化目录、上传素材目录、`storyverse.dump` 和项目 JSON
+快照，并至少保留一份不在同一块硬盘上的副本。
+
+## 长任务与 AI 生成
+
+- 章节、结构化创作、图片生成和分镜生成都会写入生成记录。
+- `STORYVERSE_GENERATION_TIMEOUT_MS` 控制运行中任务的超时标记，默认 10 分钟。
+- 如果容器重启导致任务停在 `running`，下次读取生成记录时会标记为 `failed`，避免 UI
+  永远显示运行中。
+- 当前版本仍使用进程内执行；大规模批量图片或视频渲染建议在后续版本引入独立 Worker。
 
 ## 升级与验收
 
@@ -96,5 +114,6 @@ docker compose -p storyverse up -d --build
 npm run test:e2e
 ```
 
-API 容器启动前会自动应用 migration。E2E 脚本通过 Web 入口完成健康检查、创建项目、
-创建故事线与节点、保存正文、导出 Markdown，并删除测试项目。
+API 容器启动前会自动应用 migration。E2E 脚本通过 Web 入口完成健康检查、认证状态、
+AI Provider、故事线、节点、显式边、角色技能、场景检查器、素材上传、分镜生成、正文、
+导出 Markdown，并删除测试项目。

@@ -6,6 +6,7 @@ import {
   storylineSchema,
   storyBibleSchema,
   storyNodeSchema,
+  storyNodeEdgeSchema,
   worldRuleSchema,
   type CreateCharacterInput,
   type CreateCharacterRelationInput,
@@ -13,6 +14,7 @@ import {
   type CreateStorylineInput,
   type CreateStorylineMilestoneInput,
   type CreateStoryNodeInput,
+  type CreateStoryNodeEdgeInput,
   type CreateWorldRuleInput,
   type UpdateStoryNodeInput,
   type UpsertStoryBibleInput,
@@ -126,4 +128,16 @@ export const creativeApi = {
       }),
     ),
   deleteNode: (id: string) => apiRequest(`/story-nodes/${id}`, { method: 'DELETE' }),
+  listEdges: async (projectId: string) =>
+    list(storyNodeEdgeSchema).parse(
+      (await apiRequest(`/projects/${projectId}/story-node-edges`)) as unknown[],
+    ),
+  createEdge: async (projectId: string, input: CreateStoryNodeEdgeInput) =>
+    storyNodeEdgeSchema.parse(
+      await apiRequest(`/projects/${projectId}/story-node-edges`, {
+        body: JSON.stringify(input),
+        method: 'POST',
+      }),
+    ),
+  deleteEdge: (id: string) => apiRequest(`/story-node-edges/${id}`, { method: 'DELETE' }),
 };

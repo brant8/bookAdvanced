@@ -85,3 +85,35 @@ jobs:
 
       - name: Run integration tests
         run: npm run test:integration
+
+  e2e:
+    name: Docker E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start StoryVerse stack
+        run: docker compose -p storyverse up -d --build
+
+      - name: Run full E2E smoke
+        run: npm run test:e2e
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -p storyverse logs --tail=200
+
+      - name: Stop StoryVerse stack
+        if: always()
+        run: docker compose -p storyverse down

@@ -12,6 +12,7 @@ import {
   chapters,
   characters,
   foreshadows,
+  generationRuns,
   loreEntries,
   projects,
   storyBibles,
@@ -32,12 +33,61 @@ export class AiService {
   ) {}
 
   async generateChapter(nodeId: string, input: GenerateChapterInput): Promise<GeneratedChapter> {
-    const context = await this.buildContext(nodeId, input);
-    const output = await this.provider.generate(
-      input.provider,
-      buildChapterGenerationPrompt(context),
-    );
-    return generatedChapterSchema.parse(parseModelJson(output));
+    const [node] = await this.db
+      .select({ projectId: storyNodes.projectId })
+      .from(storyNodes)
+      .where(eq(storyNodes.id, nodeId))
+      .limit(1);
+    if (!node) throw new CreativeResourceNotFoundError();
+    await this.assertProject(node.projectId);
+    const [run] = await this.db
+      .insert(generationRuns)
+      .values({
+        input: {
+          extraInstructions: input.extraInstructions,
+          nodeId,
+          targetWords: input.targetWords,
+        },
+        ownerId: this.ownerId,
+        projectId: node.projectId,
+        startedAt: new Date(),
+        status: 'running',
+        taskType: 'chapter.generate',
+      })
+      .returning({ id: generationRuns.id });
+    try {
+      const context = await this.buildContext(nodeId, input);
+      const output = await this.provider.generate(
+        input.provider,
+        buildChapterGenerationPrompt(context),
+      );
+      const generated = generatedChapterSchema.parse(parseModelJson(output));
+      if (run) {
+        await this.db
+          .update(generationRuns)
+          .set({
+            completedAt: new Date(),
+            output: generated,
+            status: 'completed',
+            updatedAt: new Date(),
+          })
+          .where(eq(generationRuns.id, run.id));
+      }
+      return generated;
+    } catch (cause) {
+      if (run) {
+        await this.db
+          .update(generationRuns)
+          .set({
+            completedAt: new Date(),
+            error: cause instanceof Error ? cause.message : 'Unknown generation error.',
+            status: 'failed',
+            updatedAt: new Date(),
+          })
+          .where(eq(generationRuns.id, run.id));
+      }
+      throw cause;
+    }
   }
 
   async previewContext(nodeId: string, targetWords = 1500): Promise<GenerationContext> {

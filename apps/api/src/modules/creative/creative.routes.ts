@@ -10,6 +10,7 @@ import {
   createStorylineMilestoneSchema,
   createStorylineSchema,
   createStoryNodeSchema,
+  createStoryNodeEdgeSchema,
   createWorldRuleSchema,
   projectResourceParamsSchema,
   resourceIdParamsSchema,
@@ -19,6 +20,7 @@ import {
   updateStorylineMilestoneSchema,
   updateStorylineSchema,
   updateStoryNodeSchema,
+  updateStoryNodeEdgeSchema,
   updateWorldRuleSchema,
   upsertStoryBibleSchema,
 } from '@storyverse/contracts';
@@ -172,6 +174,26 @@ export function createCreativeRoutes(service: CreativeService) {
   routes.delete(
     '/story-nodes/:id',
     itemDelete((id) => service.deleteStoryNode(id)),
+  );
+  routes.get(
+    '/projects/:projectId/story-node-edges',
+    project((id) => service.listStoryNodeEdges(id)),
+  );
+  routes.post(
+    '/projects/:projectId/story-node-edges',
+    projectBody(
+      createStoryNodeEdgeSchema,
+      (id, input) => service.createStoryNodeEdge(id, input),
+      201,
+    ),
+  );
+  routes.patch(
+    '/story-node-edges/:id',
+    itemBody(updateStoryNodeEdgeSchema, (id, input) => service.updateStoryNodeEdge(id, input)),
+  );
+  routes.delete(
+    '/story-node-edges/:id',
+    itemDelete((id) => service.deleteStoryNodeEdge(id)),
   );
 
   return routes;

@@ -23,6 +23,10 @@ services:
     environment:
       DATABASE_URL: postgresql://${STORYVERSE_DB_USER:-storyverse}:${STORYVERSE_DB_PASSWORD:-storyverse_dev}@postgres:5432/${STORYVERSE_DB_NAME:-storyverse}
       STORYVERSE_API_PORT: 4310
+      STORYVERSE_AUTH_MODE: ${STORYVERSE_AUTH_MODE:-local}
+      STORYVERSE_SECRET_KEY: ${STORYVERSE_SECRET_KEY:-storyverse-local-development-key}
+      STORYVERSE_UPLOAD_DIR: /app/data/uploads
+      STORYVERSE_GENERATION_TIMEOUT_MS: ${STORYVERSE_GENERATION_TIMEOUT_MS:-600000}
     healthcheck:
       test:
         [
@@ -35,6 +39,8 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+    volumes:
+      - ${STORYVERSE_UPLOAD_DIR:-storyverse_uploads}:/app/data/uploads
 
   postgres:
     image: postgres:17-alpine
@@ -61,3 +67,5 @@ services:
 volumes:
   storyverse_postgres_data:
     name: storyverse_postgres_data
+  storyverse_uploads:
+    name: storyverse_uploads

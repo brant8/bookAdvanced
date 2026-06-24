@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router';
 
 import { creativeApi } from './creativeApi';
+import { AiGeneratePanel } from './AiGeneratePanel';
 
 export function WorldPage() {
   const { projectId = '' } = useParams();
@@ -23,6 +24,25 @@ export function WorldPage() {
     <main className="workspace-page">
       <p className="eyebrow">T-006 / LORE</p>
       <h1>世界设定</h1>
+      <AiGeneratePanel
+        projectId={projectId}
+        taskType="lore.generate"
+        onApply={(candidate) =>
+          creativeApi
+            .createLore(projectId, {
+              category: ['faction', 'ability', 'history', 'glossary', 'custom'].includes(
+                String(candidate.category),
+              )
+                ? (candidate.category as 'custom')
+                : 'custom',
+              description: String(candidate.description ?? ''),
+              detail: String(candidate.detail ?? ''),
+              name: String(candidate.name ?? 'AI 世界设定'),
+              tags: Array.isArray(candidate.tags) ? candidate.tags.map(String) : [],
+            })
+            .then(() => queryClient.invalidateQueries({ queryKey: ['lore', projectId] }))
+        }
+      />
       <section className="panel">
         <div className="inline-form">
           <input

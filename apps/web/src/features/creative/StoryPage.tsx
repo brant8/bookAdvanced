@@ -1,10 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import {
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  type Connection,
+  type Edge,
+  type Node,
+} from '@xyflow/react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 
-import type { StoryNode } from '@storyverse/contracts';
-
 import { creativeApi } from './creativeApi';
+import { AiGeneratePanel } from './AiGeneratePanel';
+import '@xyflow/react/dist/style.css';
 
 export function StoryPage() {
   const { projectId = '' } = useParams();
@@ -16,6 +25,10 @@ export function StoryPage() {
   const nodes = useQuery({
     queryFn: () => creativeApi.listNodes(projectId),
     queryKey: ['story-nodes', projectId],
+  });
+  const edges = useQuery({
+    queryFn: () => creativeApi.listEdges(projectId),
+    queryKey: ['story-node-edges', projectId],
   });
   const [title, setTitle] = useState('');
   const createStoryline = useMutation({
@@ -30,6 +43,45 @@ export function StoryPage() {
       creativeApi.updateNode(id, { canvasX: x, canvasY: y }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['story-nodes', projectId] }),
   });
+  const createEdge = useMutation({
+    mutationFn: (connection: Connection) =>
+      creativeApi.createEdge(projectId, {
+        sourceNodeId: connection.source,
+        targetNodeId: connection.target,
+        type: 'flow',
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['story-node-edges', projectId] }),
+  });
+  const flowNodes = useMemo<Node[]>(
+    () =>
+      (nodes.data ?? []).map((node) => ({
+        className: `story-flow-node story-flow-node--${node.status}`,
+        data: {
+          label: (
+            <>
+              <small>#{node.sortOrder + 1}</small>
+              <strong>{node.title}</strong>
+              <span>{node.nodeGoal || '等待定义节点目标'}</span>
+            </>
+          ),
+        },
+        id: node.id,
+        position: { x: node.canvasX, y: node.canvasY },
+      })),
+    [nodes.data],
+  );
+  const flowEdges = useMemo<Edge[]>(
+    () =>
+      (edges.data ?? []).map((edge) => ({
+        animated: edge.type === 'flow',
+        id: edge.id,
+        label: edge.label || undefined,
+        source: edge.sourceNodeId,
+        target: edge.targetNodeId,
+        type: 'smoothstep',
+      })),
+    [edges.data],
+  );
 
   return (
     <main className="workspace-page workspace-page--wide">
@@ -37,7 +89,7 @@ export function StoryPage() {
       <div className="page-heading">
         <div>
           <h1>故事线画布</h1>
-          <p>拖动节点调整空间布局，松开后自动保存坐标。</p>
+          <p>拖动节点端口主动连线，支持画布平移、缩放、小地图和坐标自动保存。</p>
         </div>
         <div className="compact-form">
           <input
@@ -50,28 +102,53 @@ export function StoryPage() {
           </button>
         </div>
       </div>
-      <div className="story-canvas">
-        <svg className="story-canvas__lines">
-          {(nodes.data ?? []).slice(1).map((node, index) => {
-            const previous = nodes.data?.[index];
-            return previous ? (
-              <line
-                key={node.id}
-                x1={previous.canvasX + 90}
-                y1={previous.canvasY + 55}
-                x2={node.canvasX + 90}
-                y2={node.canvasY + 55}
-              />
-            ) : null;
-          })}
-        </svg>
-        {(nodes.data ?? []).map((node) => (
-          <CanvasNode
-            key={`${node.id}-${node.canvasX}-${node.canvasY}`}
-            node={node}
-            onMove={(x, y) => moveNode.mutate({ id: node.id, x, y })}
-          />
-        ))}
+      <AiGeneratePanel
+        projectId={projectId}
+        taskType="storyline.generate"
+        onApply={async (candidate) => {
+          const line = await creativeApi.createStoryline(projectId, {
+            description: String(candidate.description ?? ''),
+            endingGoal: String(candidate.endingGoal ?? ''),
+            generationConstraints: Array.isArray(candidate.generationConstraints)
+              ? candidate.generationConstraints.map(String)
+              : [],
+            title: String(candidate.title ?? 'AI 故事线'),
+          });
+          if (Array.isArray(candidate.milestones)) {
+            await Promise.all(
+              candidate.milestones.map((value, index) => {
+                const item = value as Record<string, unknown>;
+                return creativeApi.createMilestone(line.id, {
+                  description: String(item.description ?? ''),
+                  sortOrder: index,
+                  title: String(item.title ?? `里程碑 ${index + 1}`),
+                });
+              }),
+            );
+          }
+          await queryClient.invalidateQueries({ queryKey: ['storylines', projectId] });
+        }}
+      />
+      <div className="story-canvas story-canvas--flow">
+        <ReactFlow
+          deleteKeyCode={['Backspace', 'Delete']}
+          edges={flowEdges}
+          fitView
+          minZoom={0.2}
+          nodes={flowNodes}
+          onConnect={(connection) => createEdge.mutate(connection)}
+          onEdgesDelete={(deleted) => {
+            for (const edge of deleted) void creativeApi.deleteEdge(edge.id);
+            void queryClient.invalidateQueries({ queryKey: ['story-node-edges', projectId] });
+          }}
+          onNodeDragStop={(_, node) =>
+            moveNode.mutate({ id: node.id, x: node.position.x, y: node.position.y })
+          }
+        >
+          <Background gap={20} size={1} />
+          <MiniMap pannable zoomable />
+          <Controls />
+        </ReactFlow>
         {!nodes.data?.length ? <p className="canvas-empty">先在下方创建一个故事节点。</p> : null}
       </div>
       <NodeCreator
@@ -80,33 +157,6 @@ export function StoryPage() {
         storylines={storylines.data ?? []}
       />
     </main>
-  );
-}
-
-function CanvasNode({ node, onMove }: { node: StoryNode; onMove(x: number, y: number): void }) {
-  const [position, setPosition] = useState({ x: node.canvasX, y: node.canvasY });
-  return (
-    <article
-      className={`canvas-node canvas-node--${node.status}`}
-      style={{ left: position.x, top: position.y }}
-      onPointerDown={(event) => {
-        const origin = { clientX: event.clientX, clientY: event.clientY, ...position };
-        let latest = position;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        event.currentTarget.onpointermove = (move) => {
-          latest = {
-            x: Math.max(0, origin.x + move.clientX - origin.clientX),
-            y: Math.max(0, origin.y + move.clientY - origin.clientY),
-          };
-          setPosition(latest);
-        };
-        event.currentTarget.onpointerup = () => onMove(latest.x, latest.y);
-      }}
-    >
-      <small>#{node.sortOrder + 1}</small>
-      <strong>{node.title}</strong>
-      <p>{node.nodeGoal || '等待定义节点目标'}</p>
-    </article>
   );
 }
 

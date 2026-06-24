@@ -12,7 +12,7 @@
 
 ## 当前状态
 
-项目已完成工程、应用和数据库基线。实际开发范围、任务顺序和成本约束以
+项目已完成工程、应用、数据库基线和 AI 原生创作升级主体。实际开发范围、任务顺序和成本约束以
 `docs/PROJECT_PLAN.md` 与 `PROGRESS.md` 为准；原始文档保留为需求来源。
 
 ## 本地端口
@@ -58,6 +58,13 @@ docker compose -p storyverse up -d --build
 
 核心功能不依赖付费服务。AI 可连接本地 Ollama，也可由用户自行提供 OpenAI 兼容
 服务的 API Key。
+
+NAS 账号模式请设置 `STORYVERSE_AUTH_MODE=account`、强数据库密码和至少 32 位
+`STORYVERSE_SECRET_KEY`，并运行：
+
+```bash
+npm run ops:preflight
+```
 
 ## 持续集成
 

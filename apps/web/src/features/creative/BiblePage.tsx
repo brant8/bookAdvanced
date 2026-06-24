@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router';
 
 import { creativeApi } from './creativeApi';
+import { AiGeneratePanel } from './AiGeneratePanel';
 
 export function BiblePage() {
   const { projectId = '' } = useParams();
@@ -31,6 +32,17 @@ export function BiblePage() {
       <p className="eyebrow">T-006 / STORY BIBLE</p>
       <h1>创作圣经</h1>
       <p className="page-intro">锁定世界规则、写作风格、剧情目标和结局方向。</p>
+      <AiGeneratePanel
+        projectId={projectId}
+        taskType="bible.generate"
+        onApply={(candidate) =>
+          saveBible.mutate(
+            Object.fromEntries(
+              Object.entries(candidate).filter(([, value]) => typeof value === 'string'),
+            ) as Record<string, string>,
+          )
+        }
+      />
       <form
         className="panel form-grid"
         key={bible.data?.updatedAt ?? 'new'}

@@ -55,7 +55,7 @@ export function ProjectListPage() {
         <div className="home-sidebar__features">
           <span>结构化创作</span>
           <span>本地优先</span>
-          <span>AI 可选接入</span>
+          <span>AI 深度协作</span>
         </div>
         <div className="workspace__local">
           <span className="status-dot" />
