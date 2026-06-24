@@ -710,13 +710,33 @@
 - 待完成：
   - 需要 NAS 地址、部署目录和连接方式后，在目标 NAS 执行严格预检、构建、E2E、重启恢复与备份恢复验收。
 
+### T-026 真实 AI Provider 联调与费用控制
+
+- 状态：部分完成（可靠性与费用控制完成，真实模型凭据待配置）
+- 更新日期：2026-06-23
+- 变更：
+  - 文本与图片 Provider 共用带指数退避的 HTTP 请求层，默认最多尝试 3 次。
+  - 仅网络错误、限流、请求超时和服务端错误自动重试；认证与参数错误立即返回。
+  - 文本 Chat Completions 和 Responses 请求统一应用 `STORYVERSE_AI_MAX_OUTPUT_TOKENS`，默认 4096，限制单次生成消耗。
+  - 新增重试次数、基础退避和 token 上限环境变量，并传入 Docker API 容器。
+  - 已禁用或非文本 Provider 不再允许用于文本生成。
+- 验证：
+  - 新增限流、网络失败、不重试认证失败、Chat Completions token 上限和 Responses token 上限测试。
+  - `npm run format:check`、`npm run lint`、`npm run typecheck` 和 `npm run build` 通过。
+  - `npm test`：13 个测试文件、24 个测试通过。
+  - `npm run test:integration`：8 个测试文件、10 个测试通过。
+  - Docker API 容器确认加载重试 3 次、退避 500 ms、最大输出 4096 token。
+  - 容器重建后 `npm run test:e2e` 通过。
+- 待完成：
+  - 本机未安装 Ollama，Provider 列表为空；需要配置一个真实文本 Provider 和一个真实图片 Provider 后，测量质量、延迟、token/图片费用及失败恢复表现。
+
 下一推荐任务可连续执行：
 
-1. **T-026：真实 AI Provider 联调，验证文本/图片模型、失败重试、费用控制与生成质量**
+1. **T-026B：配置真实文本与图片 Provider，完成质量、延迟和实际费用联调**
 2. **R-007：真实创作样例验收，检查 AI 生成内容是否满足小说规划和视觉叙事目标**
 3. **R-009B：连接 NAS 后完成实机部署、备份恢复与重启验收**
 
-下一推荐任务：**T-026 真实 AI Provider 联调**；随后执行 **R-007 真实创作样例验收**。获得 NAS 连接信息后继续 **R-009B**。
+下一推荐任务：**T-026B 配置真实文本与图片 Provider**；配置完成后可连续执行 **R-007 真实创作样例验收**。获得 NAS 连接信息后继续 **R-009B**。
 
 ## 更新模板
 

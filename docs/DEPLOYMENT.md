@@ -35,6 +35,8 @@ STORYVERSE_DB_PASSWORD=请替换为长随机密码
 STORYVERSE_AUTH_MODE=account
 STORYVERSE_SECRET_KEY=请替换为至少32位的长随机密钥
 STORYVERSE_GENERATION_TIMEOUT_MS=600000
+STORYVERSE_AI_RETRY_ATTEMPTS=3
+STORYVERSE_AI_MAX_OUTPUT_TOKENS=4096
 ```
 
 4. 执行 `npm run ops:preflight:nas`，确认账号、密钥、目录和数据库绑定满足 NAS 安全要求。
@@ -77,6 +79,11 @@ Linux/NAS 若不支持 `host.docker.internal`，使用宿主机局域网 IP。
 
 图片模型请新增“图片模型”类型的 Provider。StoryVerse 会把生成结果下载到
 `STORYVERSE_UPLOAD_DIR`，避免长期依赖第三方临时 URL。
+
+文本和图片请求会对网络错误、限流与服务端错误进行最多
+`STORYVERSE_AI_RETRY_ATTEMPTS` 次尝试。文本请求通过
+`STORYVERSE_AI_MAX_OUTPUT_TOKENS` 限制单次最大输出，建议先使用较小值验证质量，再按需提高。
+认证失败和参数错误不会自动重试，避免无效请求继续消耗额度。
 
 ## 备份与恢复
 

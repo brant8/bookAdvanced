@@ -30,6 +30,7 @@ import {
 import type { AiSettingsService } from '../ai-settings/ai-settings.service.js';
 import { decryptSecret } from '../ai-settings/secret-box.js';
 import type { TextGenerationProvider } from '../ai/ai.provider.js';
+import { fetchWithRetry } from '../ai/provider-http.js';
 import { CreativeResourceNotFoundError } from '../creative/creative.service.js';
 
 export class VisualService {
@@ -161,7 +162,7 @@ export class VisualService {
       if (provider.encryptedApiKey) {
         headers.authorization = `Bearer ${decryptSecret(provider.encryptedApiKey)}`;
       }
-      const response = await fetch(`${baseUrl}/images/generations`, {
+      const response = await fetchWithRetry(`${baseUrl}/images/generations`, {
         body: JSON.stringify({
           model: provider.defaultModel,
           prompt: input.prompt,
@@ -182,7 +183,9 @@ export class VisualService {
       if (first?.b64_json) {
         bytes = Buffer.from(first.b64_json, 'base64');
       } else if (first?.url) {
-        const image = await fetch(first.url);
+        const image = await fetchWithRetry(first.url, {
+          signal: AbortSignal.timeout(120_000),
+        });
         if (!image.ok) throw new Error('Could not download generated image.');
         mimeType = image.headers.get('content-type') ?? mimeType;
         bytes = Buffer.from(await image.arrayBuffer());

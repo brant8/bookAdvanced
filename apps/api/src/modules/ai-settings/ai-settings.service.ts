@@ -68,7 +68,14 @@ export class AiSettingsService {
     const [row] = await this.db
       .select()
       .from(aiProviders)
-      .where(and(eq(aiProviders.id, id), eq(aiProviders.ownerId, this.ownerId)))
+      .where(
+        and(
+          eq(aiProviders.id, id),
+          eq(aiProviders.ownerId, this.ownerId),
+          eq(aiProviders.kind, 'text'),
+          eq(aiProviders.enabled, true),
+        ),
+      )
       .limit(1);
     if (!row) throw new AiSettingsNotFoundError();
     return {

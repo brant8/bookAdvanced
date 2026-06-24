@@ -1,5 +1,7 @@
 import type { AiProviderConfig } from '@storyverse/contracts';
 
+import { fetchWithRetry, maxOutputTokens } from './provider-http.js';
+
 export interface TextGenerationProvider {
   generate(config: AiProviderConfig, prompt: string): Promise<string>;
 }
@@ -13,20 +15,24 @@ export class OpenAiCompatibleProvider implements TextGenerationProvider {
     const isResponses = config.protocol === 'responses';
     let response: Response;
     try {
-      response = await fetch(`${baseUrl}${isResponses ? '/responses' : '/chat/completions'}`, {
-        body: JSON.stringify(
-          isResponses
-            ? { input: prompt, model: config.model }
-            : {
-                messages: [{ content: prompt, role: 'user' }],
-                model: config.model,
-                temperature: 0.7,
-              },
-        ),
-        headers,
-        method: 'POST',
-        signal: AbortSignal.timeout(180_000),
-      });
+      response = await fetchWithRetry(
+        `${baseUrl}${isResponses ? '/responses' : '/chat/completions'}`,
+        {
+          body: JSON.stringify(
+            isResponses
+              ? { input: prompt, max_output_tokens: maxOutputTokens(), model: config.model }
+              : {
+                  max_tokens: maxOutputTokens(),
+                  messages: [{ content: prompt, role: 'user' }],
+                  model: config.model,
+                  temperature: 0.7,
+                },
+          ),
+          headers,
+          method: 'POST',
+          signal: AbortSignal.timeout(180_000),
+        },
+      );
     } catch (cause) {
       throw new AiProviderError(
         `Could not connect to AI provider: ${cause instanceof Error ? cause.message : 'unknown error'}`,
