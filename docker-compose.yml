@@ -50,7 +50,7 @@ services:
       POSTGRES_PASSWORD: ${STORYVERSE_DB_PASSWORD:-storyverse_dev}
       POSTGRES_USER: ${STORYVERSE_DB_USER:-storyverse}
     ports:
-      - '${STORYVERSE_DB_PORT:-55432}:5432'
+      - '${STORYVERSE_DB_BIND_ADDRESS:-127.0.0.1}:${STORYVERSE_DB_PORT:-55432}:5432'
     healthcheck:
       test:
         [

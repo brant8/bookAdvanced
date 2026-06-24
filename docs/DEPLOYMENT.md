@@ -11,7 +11,7 @@ docker compose -p storyverse up -d --build
 
 - Web：`http://localhost:4311`
 - API 健康检查：`http://localhost:4311/api/health`
-- PostgreSQL 宿主机端口：`55432`
+- PostgreSQL 宿主机端口：`127.0.0.1:55432`
 
 端口均可在 `.env` 中修改。Compose 项目名固定为 `storyverse`，避免与同一主机上的
 其他项目共享容器、网络或数据卷名称。
@@ -30,13 +30,14 @@ STORYVERSE_DATA_DIR=/volume1/docker/storyverse/postgres
 STORYVERSE_UPLOAD_DIR=/volume1/docker/storyverse/uploads
 STORYVERSE_WEB_PORT=4311
 STORYVERSE_DB_PORT=55432
+STORYVERSE_DB_BIND_ADDRESS=127.0.0.1
 STORYVERSE_DB_PASSWORD=请替换为长随机密码
 STORYVERSE_AUTH_MODE=account
 STORYVERSE_SECRET_KEY=请替换为至少32位的长随机密钥
 STORYVERSE_GENERATION_TIMEOUT_MS=600000
 ```
 
-4. 执行 `npm run ops:preflight`，确认没有阻断性安全配置问题。
+4. 执行 `npm run ops:preflight:nas`，确认账号、密钥、目录和数据库绑定满足 NAS 安全要求。
 5. 确保目录仅允许管理员和容器服务账号访问。
 6. 执行 `docker compose -p storyverse up -d --build`。
 
@@ -49,7 +50,7 @@ STORYVERSE_GENERATION_TIMEOUT_MS=600000
 
 - 使用 NAS 自带反向代理、Caddy、Traefik 或 Nginx。
 - 只代理 Web 的 `4311` 端口，并配置 HTTPS 和访问控制。
-- 不向公网开放 PostgreSQL 的 `55432` 端口。
+- PostgreSQL 默认只绑定 NAS 的 `127.0.0.1:55432`，不要改为公网或局域网地址。
 - `/api` 已由 Web 容器代理到内部 API。
 - 公网或跨设备访问时必须启用 `STORYVERSE_AUTH_MODE=account`。
 - 账号模式下 `STORYVERSE_SECRET_KEY` 不得使用示例值；它用于加密已保存的 AI Key。
