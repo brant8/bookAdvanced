@@ -13,6 +13,7 @@ import {
 } from '../../db/schema.js';
 import type { AiSettingsService } from '../ai-settings/ai-settings.service.js';
 import type { TextGenerationProvider } from '../ai/ai.provider.js';
+import { generateStructured } from '../ai/structured-generation.js';
 import { CreativeResourceNotFoundError } from '../creative/creative.service.js';
 
 export class CreativeGenerationService {
@@ -44,11 +45,12 @@ export class CreativeGenerationService {
       .returning({ id: generationRuns.id });
     if (!run) throw new Error('Could not create generation run.');
     try {
-      const output = await this.provider.generate(
+      const candidate = await generateStructured(
+        this.provider,
         config,
         buildPrompt(input.taskType, context, input.instructions),
+        parseJson,
       );
-      const candidate = parseJson(output);
       await this.db
         .update(generationRuns)
         .set({

@@ -42,7 +42,10 @@ describe('chapter generation context', () => {
     expect(prompt).toContain('取得第一份证词');
     expect(prompt).toContain('取得证词');
     expect(prompt).toContain('山城来信');
+    expect(prompt).not.toContain('寻找第二名证人');
     expect(prompt).toContain('公开被抹除的历史');
     expect(prompt).toContain('不得提前揭晓国王身份');
+    expect(prompt).toContain('作者保密规划');
+    expect(prompt).toContain('不得在本章提前完成下一节点目标');
   });
 });

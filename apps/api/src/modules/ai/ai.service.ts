@@ -24,6 +24,7 @@ import {
 } from '../../db/schema.js';
 import { CreativeResourceNotFoundError } from '../creative/creative.service.js';
 import type { TextGenerationProvider } from './ai.provider.js';
+import { generateStructured } from './structured-generation.js';
 
 export class AiService {
   constructor(
@@ -57,11 +58,12 @@ export class AiService {
       .returning({ id: generationRuns.id });
     try {
       const context = await this.buildContext(nodeId, input);
-      const output = await this.provider.generate(
+      const generated = await generateStructured(
+        this.provider,
         input.provider,
         buildChapterGenerationPrompt(context),
+        (output) => generatedChapterSchema.parse(parseModelJson(output)),
       );
-      const generated = generatedChapterSchema.parse(parseModelJson(output));
       if (run) {
         await this.db
           .update(generationRuns)

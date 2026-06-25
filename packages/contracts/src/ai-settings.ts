@@ -15,17 +15,22 @@ export const aiProviderSchema = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
-export const saveAiProviderSchema = z.object({
+const providerModelsSchema = z.array(z.string().trim().min(1).max(160)).max(50);
+const aiProviderInputSchema = z.object({
   name: z.string().trim().min(1).max(80),
   kind: aiProviderKindSchema,
   protocol: z.string().trim().min(1).max(80),
   baseUrl: z.string().url(),
   defaultModel: z.string().trim().min(1).max(160),
-  models: z.array(z.string().trim().min(1).max(160)).max(50).default([]),
+  models: providerModelsSchema,
   apiKey: z.string().max(2000).optional(),
+  enabled: z.boolean(),
+});
+export const saveAiProviderSchema = aiProviderInputSchema.extend({
+  models: providerModelsSchema.default([]),
   enabled: z.boolean().default(true),
 });
-export const updateAiProviderSchema = saveAiProviderSchema.partial();
+export const updateAiProviderSchema = aiProviderInputSchema.partial();
 export const generationStatusSchema = z.enum([
   'pending',
   'running',

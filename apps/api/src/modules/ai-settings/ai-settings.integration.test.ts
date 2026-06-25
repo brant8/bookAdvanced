@@ -36,6 +36,8 @@ describe('AiSettingsService integration', () => {
     expect(JSON.stringify(await service.listProviders())).not.toContain('test-secret-key');
     expect((await service.providerConfig(provider.id)).apiKey).toBe('test-secret-key');
     await service.updateProvider(provider.id, { enabled: false });
+    const renamed = await service.updateProvider(provider.id, { name: 'Renamed Provider' });
+    expect(renamed.enabled).toBe(false);
     await expect(service.providerConfig(provider.id)).rejects.toThrow();
     await service.deleteProvider(provider.id);
     await db.delete(users).where(eq(users.id, owner!.id));

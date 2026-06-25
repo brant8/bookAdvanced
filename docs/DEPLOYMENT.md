@@ -37,6 +37,7 @@ STORYVERSE_SECRET_KEY=请替换为至少32位的长随机密钥
 STORYVERSE_GENERATION_TIMEOUT_MS=600000
 STORYVERSE_AI_RETRY_ATTEMPTS=3
 STORYVERSE_AI_MAX_OUTPUT_TOKENS=4096
+STORYVERSE_AI_STRUCTURED_RETRY_ATTEMPTS=2
 ```
 
 4. 执行 `npm run ops:preflight:nas`，确认账号、密钥、目录和数据库绑定满足 NAS 安全要求。
@@ -54,6 +55,7 @@ STORYVERSE_AI_MAX_OUTPUT_TOKENS=4096
 - 只代理 Web 的 `4311` 端口，并配置 HTTPS 和访问控制。
 - PostgreSQL 默认只绑定 NAS 的 `127.0.0.1:55432`，不要改为公网或局域网地址。
 - `/api` 已由 Web 容器代理到内部 API。
+- Web 代理允许 AI 请求运行最多 360 秒，素材上传上限为 20 MB。
 - 公网或跨设备访问时必须启用 `STORYVERSE_AUTH_MODE=account`。
 - 账号模式下 `STORYVERSE_SECRET_KEY` 不得使用示例值；它用于加密已保存的 AI Key。
 - `STORYVERSE_DATA_DIR` 与 `STORYVERSE_UPLOAD_DIR` 都应位于 NAS 持久化目录，并纳入备份。
@@ -80,10 +82,21 @@ Linux/NAS 若不支持 `host.docker.internal`，使用宿主机局域网 IP。
 图片模型请新增“图片模型”类型的 Provider。StoryVerse 会把生成结果下载到
 `STORYVERSE_UPLOAD_DIR`，避免长期依赖第三方临时 URL。
 
+OpenRouter 图片 Provider 使用以下配置：
+
+- 地址：`https://openrouter.ai/api/v1`
+- 协议：`openrouter-images`
+- 模型：从 OpenRouter 图片模型列表选择
+
+OpenRouter 图片模型可能产生费用。余额不足时应先保持 Provider 禁用，不要用真实生成请求测试连通性。
+
 文本和图片请求会对网络错误、限流与服务端错误进行最多
 `STORYVERSE_AI_RETRY_ATTEMPTS` 次尝试。文本请求通过
 `STORYVERSE_AI_MAX_OUTPUT_TOKENS` 限制单次最大输出，建议先使用较小值验证质量，再按需提高。
 认证失败和参数错误不会自动重试，避免无效请求继续消耗额度。
+结构化创作输出若为空或不是有效 JSON，会按
+`STORYVERSE_AI_STRUCTURED_RETRY_ATTEMPTS` 再生成，默认最多 2 次；付费模型可设为 `1`
+以严格控制费用。
 
 ## 备份与恢复
 

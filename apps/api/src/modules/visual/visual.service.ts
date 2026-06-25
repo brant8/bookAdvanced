@@ -31,6 +31,7 @@ import type { AiSettingsService } from '../ai-settings/ai-settings.service.js';
 import { decryptSecret } from '../ai-settings/secret-box.js';
 import type { TextGenerationProvider } from '../ai/ai.provider.js';
 import { fetchWithRetry } from '../ai/provider-http.js';
+import { generateStructured } from '../ai/structured-generation.js';
 import { CreativeResourceNotFoundError } from '../creative/creative.service.js';
 
 export class VisualService {
@@ -162,17 +163,22 @@ export class VisualService {
       if (provider.encryptedApiKey) {
         headers.authorization = `Bearer ${decryptSecret(provider.encryptedApiKey)}`;
       }
-      const response = await fetchWithRetry(`${baseUrl}/images/generations`, {
-        body: JSON.stringify({
-          model: provider.defaultModel,
-          prompt: input.prompt,
-          response_format: 'b64_json',
-          size: input.size,
-        }),
-        headers,
-        method: 'POST',
-        signal: AbortSignal.timeout(300_000),
-      });
+      const isOpenRouter = provider.protocol === 'openrouter-images';
+      const response = await fetchWithRetry(
+        `${baseUrl}${isOpenRouter ? '/images' : '/images/generations'}`,
+        {
+          body: JSON.stringify({
+            model: provider.defaultModel,
+            n: 1,
+            prompt: input.prompt,
+            ...(isOpenRouter ? {} : { response_format: 'b64_json' }),
+            size: input.size,
+          }),
+          headers,
+          method: 'POST',
+          signal: AbortSignal.timeout(300_000),
+        },
+      );
       if (!response.ok) throw new Error(`Image Provider returned ${response.status}.`);
       const payload = (await response.json()) as {
         data?: { b64_json?: string; url?: string }[];
@@ -294,7 +300,8 @@ export class VisualService {
         })
         .returning({ id: generationRuns.id });
       try {
-        const output = await this.textProvider.generate(
+        const generated = await generateStructured(
+          this.textProvider,
           config,
           [
             '你是小说分镜导演。只输出 JSON 数组，不要 Markdown。',
@@ -309,8 +316,8 @@ export class VisualService {
               })),
             ),
           ].join('\n\n'),
+          parseShotDrafts,
         );
-        const generated = parseShotDrafts(output);
         shotDrafts = generated.map((shot, index) => ({
           ...shot,
           sortOrder: index,
