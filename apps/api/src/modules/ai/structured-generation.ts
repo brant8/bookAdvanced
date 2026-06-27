@@ -7,6 +7,7 @@ export async function generateStructured<T>(
   config: AiProviderConfig,
   prompt: string,
   parse: (output: string) => T,
+  options: { jsonMode?: 'object' } = {},
 ): Promise<T> {
   const attempts = structuredAttempts();
   let lastError: unknown;
@@ -18,6 +19,7 @@ export async function generateStructured<T>(
         attempt === 1
           ? prompt
           : `${prompt}\n\n上一次输出不是有效的目标 JSON。请重新生成完整 JSON，不要解释、注释或 Markdown。`,
+        options,
       );
       try {
         return parse(output);

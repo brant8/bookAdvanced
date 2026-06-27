@@ -37,7 +37,10 @@ export function buildChapterGenerationPrompt(context: GenerationContext): string
     '正文必须围绕当前故事节点，逐步推进当前里程碑和既定结局，不得跳过中间阶段。',
     '创作圣经的结局方向和故事线的 endingGoal 是作者保密规划，只用于校准方向；除非当前节点的 requiredEvents 明确要求揭晓，否则正文不得直接陈述、证明或完成这些秘密。',
     '下一节点只用于设计本章末尾的入口或悬念，不得在本章提前完成下一节点目标。',
+    '如果下一节点入口为 null，说明当前节点是本故事线终点；report.nextChapterGoal 必须写“主线已完成，等待作者开启新线”，不要再提出新的主线目标。',
     '不要自行修改故事结构；推进报告只是建议，等待作者确认。',
+    '章节正文必须按场景展开，不要写成剧情梗概。至少包含环境动作、人物反应、关键对话、技术/世界规则的具体呈现，以及一个清晰的段落式结尾。',
+    `正文长度硬约束：中文按汉字估算，content 至少写到目标字数的 70%（本次不少于 ${Math.ceil(context.targetWords * 0.7)} 字）；如果初稿不足，请在同一 JSON 中自行扩写后再输出。`,
     section('创作圣经', context.bible),
     section('故事线', context.storyline),
     section(

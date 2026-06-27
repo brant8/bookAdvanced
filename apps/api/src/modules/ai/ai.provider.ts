@@ -3,11 +3,23 @@ import type { AiProviderConfig } from '@storyverse/contracts';
 import { fetchWithRetry, maxOutputTokens } from './provider-http.js';
 
 export interface TextGenerationProvider {
-  generate(config: AiProviderConfig, prompt: string): Promise<string>;
+  generate(
+    config: AiProviderConfig,
+    prompt: string,
+    options?: TextGenerationOptions,
+  ): Promise<string>;
+}
+
+export interface TextGenerationOptions {
+  jsonMode?: 'object';
 }
 
 export class OpenAiCompatibleProvider implements TextGenerationProvider {
-  async generate(config: AiProviderConfig, prompt: string): Promise<string> {
+  async generate(
+    config: AiProviderConfig,
+    prompt: string,
+    options: TextGenerationOptions = {},
+  ): Promise<string> {
     const baseUrl = config.baseUrl.replace(/\/+$/, '');
     const headers: Record<string, string> = { 'content-type': 'application/json' };
     if (config.apiKey) headers.authorization = `Bearer ${config.apiKey}`;
@@ -25,6 +37,9 @@ export class OpenAiCompatibleProvider implements TextGenerationProvider {
                   max_tokens: maxOutputTokens(),
                   messages: [{ content: prompt, role: 'user' }],
                   model: config.model,
+                  ...(options.jsonMode === 'object'
+                    ? { response_format: { type: 'json_object' } }
+                    : {}),
                   temperature: 0.7,
                 },
           ),

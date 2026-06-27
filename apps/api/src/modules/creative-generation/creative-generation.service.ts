@@ -50,6 +50,7 @@ export class CreativeGenerationService {
         config,
         buildPrompt(input.taskType, context, input.instructions),
         parseJson,
+        { jsonMode: 'object' },
       );
       await this.db
         .update(generationRuns)

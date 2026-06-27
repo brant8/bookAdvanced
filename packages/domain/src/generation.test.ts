@@ -47,5 +47,8 @@ describe('chapter generation context', () => {
     expect(prompt).toContain('不得提前揭晓国王身份');
     expect(prompt).toContain('作者保密规划');
     expect(prompt).toContain('不得在本章提前完成下一节点目标');
+    expect(prompt).toContain('正文长度硬约束');
+    expect(prompt).toContain('不少于 1050 字');
+    expect(prompt).toContain('主线已完成，等待作者开启新线');
   });
 });

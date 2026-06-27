@@ -15,14 +15,14 @@ export const generateChapterSchema = z.object({
 });
 
 export const progressionReportSchema = z.object({
-  completedNodeGoals: z.array(z.string()),
-  milestoneProgress: z.string(),
-  characterChanges: z.array(z.string()),
-  worldChanges: z.array(z.string()),
-  foreshadowChanges: z.array(z.string()),
-  endingAlignment: z.string(),
-  nextChapterGoal: z.string(),
-  warnings: z.array(z.string()),
+  completedNodeGoals: z.array(z.string()).default([]),
+  milestoneProgress: z.string().default(''),
+  characterChanges: z.array(z.string()).default([]),
+  worldChanges: z.array(z.string()).default([]),
+  foreshadowChanges: z.array(z.string()).default([]),
+  endingAlignment: z.string().default(''),
+  nextChapterGoal: z.string().default(''),
+  warnings: z.array(z.string()).default([]),
 });
 
 export const generatedChapterSchema = z.object({

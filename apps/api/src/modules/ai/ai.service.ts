@@ -63,6 +63,7 @@ export class AiService {
         input.provider,
         buildChapterGenerationPrompt(context),
         (output) => generatedChapterSchema.parse(parseModelJson(output)),
+        { jsonMode: 'object' },
       );
       if (run) {
         await this.db
