@@ -14,6 +14,11 @@ const ProjectDashboardPage = lazy(() =>
     default: module.ProjectDashboardPage,
   })),
 );
+const DirectorPage = lazy(() =>
+  import('./features/projects/DirectorPage').then((module) => ({
+    default: module.DirectorPage,
+  })),
+);
 const BiblePage = lazy(() =>
   import('./features/creative/BiblePage').then((module) => ({ default: module.BiblePage })),
 );
@@ -61,6 +66,7 @@ export function App() {
           <Route index element={<ProjectListPage />} />
           <Route path="projects/:projectId" element={<ProjectWorkspaceLayout />}>
             <Route index element={<ProjectDashboardPage />} />
+            <Route path="director" element={<DirectorPage />} />
             <Route path="bible" element={<BiblePage />} />
             <Route path="world" element={<WorldPage />} />
             <Route path="characters" element={<CharactersPage />} />

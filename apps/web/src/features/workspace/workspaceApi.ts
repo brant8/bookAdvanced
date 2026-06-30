@@ -1,5 +1,7 @@
 import {
   chapterSchema,
+  chapterMetaSchema,
+  directorDashboardSchema,
   exportDocumentSchema,
   foreshadowSchema,
   inspirationSchema,
@@ -29,6 +31,10 @@ export const workspaceApi = {
     ),
   stats: async (projectId: string) =>
     projectStatsSchema.parse(await apiRequest(`/projects/${projectId}/stats`)),
+  chapterMeta: async (projectId: string) =>
+    parseList(await apiRequest(`/projects/${projectId}/chapters/meta`), chapterMetaSchema),
+  directorDashboard: async (projectId: string) =>
+    directorDashboardSchema.parse(await apiRequest(`/projects/${projectId}/director-dashboard`)),
   listForeshadows: async (projectId: string) =>
     parseList(await apiRequest(`/projects/${projectId}/foreshadows`), foreshadowSchema),
   createForeshadow: async (projectId: string, input: CreateForeshadowInput) =>

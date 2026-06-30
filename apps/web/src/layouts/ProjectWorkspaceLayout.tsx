@@ -5,6 +5,7 @@ import { getProject } from '../features/projects/projectApi';
 
 const navigation = [
   ['概览', '', 'grid'],
+  ['导演视角', 'director', 'spark'],
   ['创作圣经', 'bible', 'book'],
   ['世界设定', 'world', 'globe'],
   ['角色', 'characters', 'users'],

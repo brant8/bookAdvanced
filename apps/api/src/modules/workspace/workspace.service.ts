@@ -3,6 +3,8 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type {
   CreateForeshadowInput,
   CreateInspirationInput,
+  ChapterMeta,
+  DirectorDashboard,
   ExportDocument,
   Foreshadow,
   Inspiration,
@@ -18,12 +20,16 @@ import {
   chapters,
   characterRelations,
   characters,
+  assets,
   foreshadows,
+  generationRuns,
   inspirations,
   loreEntries,
   projectSnapshots,
   projects,
   storyBibles,
+  storyboardShots,
+  storyboards,
   storylineMilestones,
   storylines,
   storyNodeCharacters,
@@ -69,6 +75,34 @@ export class WorkspaceService {
       })
       .returning();
     return dto(required(chapter));
+  }
+
+  async chapterMeta(projectId: string): Promise<ChapterMeta[]> {
+    await this.assertProject(projectId);
+    const [nodeRows, chapterRows] = await Promise.all([
+      this.db
+        .select()
+        .from(storyNodes)
+        .where(eq(storyNodes.projectId, projectId))
+        .orderBy(asc(storyNodes.sortOrder)),
+      this.db.select().from(chapters).where(eq(chapters.projectId, projectId)),
+    ]);
+    const chaptersByNode = new Map(chapterRows.map((chapter) => [chapter.storyNodeId, chapter]));
+    return nodeRows.map((node) => {
+      const chapter = chaptersByNode.get(node.id);
+      return {
+        chapterNumber: chapter?.chapterNumber ?? node.sortOrder + 1,
+        hasContent: Boolean(chapter?.wordCount),
+        isKeyScene: node.isKeyScene,
+        nodeId: node.id,
+        source: chapter?.source ?? 'human',
+        status: node.status,
+        storyTimeLabel: node.storyTimeLabel,
+        targetWordCount: chapter?.targetWordCount ?? null,
+        title: chapter?.title ?? node.title,
+        wordCount: chapter?.wordCount ?? 0,
+      };
+    });
   }
 
   async listForeshadows(projectId: string): Promise<Foreshadow[]> {
@@ -182,6 +216,89 @@ export class WorkspaceService {
           : item.importance === 'medium' && absent >= 40;
       }).length,
       totalWordCount: chapterStats?.words ?? 0,
+    };
+  }
+
+  async directorDashboard(projectId: string): Promise<DirectorDashboard> {
+    await this.assertProject(projectId);
+    const [
+      nodeRows,
+      chapterRows,
+      foreshadowRows,
+      characterRows,
+      assetRows,
+      generationRows,
+      storyboardRows,
+    ] = await Promise.all([
+      this.db.select().from(storyNodes).where(eq(storyNodes.projectId, projectId)),
+      this.db.select().from(chapters).where(eq(chapters.projectId, projectId)),
+      this.db.select().from(foreshadows).where(eq(foreshadows.projectId, projectId)),
+      this.db.select().from(characters).where(eq(characters.projectId, projectId)),
+      this.db.select().from(assets).where(eq(assets.projectId, projectId)),
+      this.db
+        .select()
+        .from(generationRuns)
+        .where(
+          and(eq(generationRuns.ownerId, this.ownerId), eq(generationRuns.projectId, projectId)),
+        )
+        .orderBy(desc(generationRuns.createdAt)),
+      this.db.select().from(storyboards).where(eq(storyboards.projectId, projectId)).limit(1),
+    ]);
+    const storyboard = storyboardRows[0];
+    const shotRows = storyboard
+      ? await this.db
+          .select()
+          .from(storyboardShots)
+          .where(eq(storyboardShots.storyboardId, storyboard.id))
+      : [];
+    const chapterCount = chapterRows.length;
+    const overdue = foreshadowRows.filter((item) => {
+      const absent = item.lastAppearedChapter
+        ? chapterCount - item.lastAppearedChapter
+        : chapterCount;
+      return item.importance === 'high'
+        ? absent >= 20
+        : item.importance === 'medium' && absent >= 40;
+    });
+    const byKind = assetRows.reduce<Record<string, number>>((result, asset) => {
+      result[asset.kind] = (result[asset.kind] ?? 0) + 1;
+      return result;
+    }, {});
+    return {
+      aiQueuePending: generationRows.filter(
+        (run) => run.status === 'pending' || run.status === 'running',
+      ).length,
+      assets: {
+        byKind,
+        total: assetRows.length,
+      },
+      characters: characterRows.map((character) => ({
+        hasVoice: character.voiceSamples.length > 0,
+        id: character.id,
+        name: character.name,
+      })),
+      foreshadows: {
+        overdue: overdue.map((item) => ({
+          id: item.id,
+          importance: item.importance,
+          title: item.title,
+        })),
+        revealed: foreshadowRows.filter((item) => item.status === 'revealed').length,
+        total: foreshadowRows.length,
+      },
+      recentGenerations: generationRows.slice(0, 5).map((run) => ({
+        createdAt: run.createdAt.toISOString(),
+        id: run.id,
+        status: run.status,
+        taskType: run.taskType,
+      })),
+      storyboardShotCount: shotRows.length,
+      story: {
+        chapterCount,
+        completedNodes: nodeRows.filter((node) => node.status === 'completed').length,
+        targetNodes: nodeRows.length,
+        totalWordCount: chapterRows.reduce((sum, chapter) => sum + chapter.wordCount, 0),
+      },
     };
   }
 

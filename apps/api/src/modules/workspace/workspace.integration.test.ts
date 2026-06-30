@@ -5,6 +5,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   chapterSchema,
+  chapterMetaSchema,
+  directorDashboardSchema,
   exportDocumentSchema,
   foreshadowSchema,
   inspirationSchema,
@@ -95,6 +97,22 @@ describe('Writing workspace integration', () => {
     );
     const stats = projectStatsSchema.parse(await get(`/projects/${project.id}/stats`));
     expect(stats).toMatchObject({ chapterCount: 1, inspirationInboxCount: 1, nodeCount: 1 });
+
+    const chapterMeta = ((await get(`/projects/${project.id}/chapters/meta`)) as unknown[]).map(
+      (item) => chapterMetaSchema.parse(item),
+    );
+    expect(chapterMeta[0]).toMatchObject({
+      hasContent: true,
+      nodeId: node.id,
+      wordCount: second.wordCount,
+    });
+
+    const director = directorDashboardSchema.parse(
+      await get(`/projects/${project.id}/director-dashboard`),
+    );
+    expect(director.story).toMatchObject({ chapterCount: 1, targetNodes: 1 });
+    expect(director.foreshadows.total).toBe(1);
+    expect(director.assets.total).toBe(0);
 
     const exported = exportDocumentSchema.parse(
       await get(`/projects/${project.id}/export/master-md`),

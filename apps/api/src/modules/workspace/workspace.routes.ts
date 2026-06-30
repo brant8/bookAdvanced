@@ -6,6 +6,7 @@ import {
   createForeshadowSchema,
   createInspirationSchema,
   createSnapshotSchema,
+  directorDashboardSchema,
   exportParamsSchema,
   projectResourceParamsSchema,
   resourceIdParamsSchema,
@@ -27,6 +28,10 @@ export function createWorkspaceRoutes(service: WorkspaceService) {
   routes.put(
     '/story-nodes/:id/chapter',
     itemBody(saveChapterSchema, (id, input) => service.saveChapter(id, input)),
+  );
+  routes.get(
+    '/projects/:projectId/chapters/meta',
+    project((id) => service.chapterMeta(id)),
   );
   routes.get(
     '/projects/:projectId/foreshadows',
@@ -63,6 +68,10 @@ export function createWorkspaceRoutes(service: WorkspaceService) {
   routes.get(
     '/projects/:projectId/stats',
     project((id) => service.stats(id)),
+  );
+  routes.get(
+    '/projects/:projectId/director-dashboard',
+    project(async (id) => directorDashboardSchema.parse(await service.directorDashboard(id))),
   );
   routes.get('/projects/:projectId/export/:format', async (context) => {
     const parsed = exportParamsSchema.safeParse(context.req.param());

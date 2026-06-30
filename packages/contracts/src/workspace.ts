@@ -20,6 +20,18 @@ export const chapterSchema = z.object({
   revision: z.number().int().positive(),
   ...timestamps,
 });
+export const chapterMetaSchema = z.object({
+  chapterNumber: z.number().int().positive(),
+  hasContent: z.boolean(),
+  isKeyScene: z.boolean(),
+  nodeId: id,
+  source: z.enum(['human', 'ai', 'mixed']),
+  status: z.enum(['planned', 'drafting', 'completed']),
+  storyTimeLabel: z.string(),
+  targetWordCount: z.number().int().positive().nullable(),
+  title: z.string(),
+  wordCount: z.number().int().min(0),
+});
 export const saveChapterSchema = z.object({
   chapterNumber: z.number().int().positive(),
   title: z.string().trim().min(1).max(160),
@@ -75,6 +87,46 @@ export const projectStatsSchema = z.object({
   overdueForeshadowCount: z.number().int().min(0),
   totalWordCount: z.number().int().min(0),
 });
+export const directorDashboardSchema = z.object({
+  aiQueuePending: z.number().int().min(0),
+  assets: z.object({
+    byKind: z.record(z.string(), z.number().int().min(0)),
+    total: z.number().int().min(0),
+  }),
+  characters: z.array(
+    z.object({
+      hasVoice: z.boolean(),
+      id,
+      name: z.string(),
+    }),
+  ),
+  foreshadows: z.object({
+    overdue: z.array(
+      z.object({
+        id,
+        importance: z.string(),
+        title: z.string(),
+      }),
+    ),
+    revealed: z.number().int().min(0),
+    total: z.number().int().min(0),
+  }),
+  recentGenerations: z.array(
+    z.object({
+      createdAt: z.iso.datetime(),
+      id,
+      status: z.string(),
+      taskType: z.string(),
+    }),
+  ),
+  storyboardShotCount: z.number().int().min(0),
+  story: z.object({
+    chapterCount: z.number().int().min(0),
+    completedNodes: z.number().int().min(0),
+    targetNodes: z.number().int().min(0),
+    totalWordCount: z.number().int().min(0),
+  }),
+});
 export const exportFormatSchema = z.enum(['master-md', 'novel-md', 'novel-txt']);
 export const exportParamsSchema = z.object({
   projectId: id,
@@ -96,6 +148,7 @@ export const createSnapshotSchema = z.object({
 });
 
 export type Chapter = z.infer<typeof chapterSchema>;
+export type ChapterMeta = z.infer<typeof chapterMetaSchema>;
 export type SaveChapterInput = z.infer<typeof saveChapterSchema>;
 export type Foreshadow = z.infer<typeof foreshadowSchema>;
 export type CreateForeshadowInput = z.infer<typeof createForeshadowSchema>;
@@ -104,5 +157,6 @@ export type Inspiration = z.infer<typeof inspirationSchema>;
 export type CreateInspirationInput = z.infer<typeof createInspirationSchema>;
 export type UpdateInspirationInput = z.infer<typeof updateInspirationSchema>;
 export type ProjectStats = z.infer<typeof projectStatsSchema>;
+export type DirectorDashboard = z.infer<typeof directorDashboardSchema>;
 export type ExportDocument = z.infer<typeof exportDocumentSchema>;
 export type ProjectSnapshot = z.infer<typeof projectSnapshotSchema>;
