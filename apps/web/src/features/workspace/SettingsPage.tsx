@@ -2,12 +2,29 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router';
 
-import { aiSettingsApi } from './aiSettingsApi';
+import { aiSettingsApi, type ProviderTestMap } from './aiSettingsApi';
 import { downloadText, workspaceApi } from './workspaceApi';
+
+const riskLabel = {
+  disabled: '已禁用',
+  free: '免费/本地',
+  low: '低风险',
+  paid: '可能计费',
+  unknown: '未知',
+};
+
+const riskColor = {
+  disabled: 'var(--text-disabled)',
+  free: 'var(--color-success)',
+  low: 'var(--brand-secondary)',
+  paid: 'var(--color-warning)',
+  unknown: 'var(--text-secondary)',
+};
 
 export function SettingsPage() {
   const { projectId = '' } = useParams();
   const queryClient = useQueryClient();
+  const [providerTests, setProviderTests] = useState<ProviderTestMap>({});
   const snapshots = useQuery({
     queryFn: () => workspaceApi.listSnapshots(projectId),
     queryKey: ['snapshots', projectId],
@@ -19,6 +36,10 @@ export function SettingsPage() {
   const providers = useQuery({
     queryFn: aiSettingsApi.listProviders,
     queryKey: ['ai-providers'],
+  });
+  const usage = useQuery({
+    queryFn: () => aiSettingsApi.usageSummary(projectId),
+    queryKey: ['ai-usage-summary', projectId],
   });
   const runs = useQuery({
     queryFn: () => aiSettingsApi.listRuns(projectId),
@@ -46,14 +67,78 @@ export function SettingsPage() {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ai-providers'] }),
   });
+  const testProvider = useMutation({
+    mutationFn: aiSettingsApi.testProvider,
+    onSuccess: (result) => {
+      setProviderTests((current) => ({ ...current, [result.id]: result }));
+      void queryClient.invalidateQueries({ queryKey: ['ai-usage-summary', projectId] });
+    },
+  });
   const runExport = async (format: string) => {
     const document = await workspaceApi.export(projectId, format);
     downloadText(document.fileName, document.contentType, document.content);
   };
   return (
     <main className="workspace-page">
-      <p className="eyebrow">T-013 / PORTABILITY</p>
+      <p className="eyebrow">T-027 / AI OPERATIONS</p>
       <h1>项目与 AI 设置</h1>
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <h2>Provider 健康与费用</h2>
+            <p>
+              这里优先保护小成本路线：文本 Provider 可做轻量试运行；图片 Provider
+              只检查配置，不会主动生成图片消耗额度。
+            </p>
+          </div>
+          <span>{usage.isFetching ? '刷新中' : '实时摘要'}</span>
+        </div>
+        <div className="metric-grid">
+          <article>
+            <span>成功率</span>
+            <strong>{Math.round((usage.data?.successRate ?? 0) * 100)}%</strong>
+            <small>{usage.data?.totalRuns ?? 0} 次生成记录</small>
+          </article>
+          <article>
+            <span>运行中</span>
+            <strong>{usage.data?.runningCount ?? 0}</strong>
+            <small>长任务队列观察</small>
+          </article>
+          <article>
+            <span>失败</span>
+            <strong>{usage.data?.failedCount ?? 0}</strong>
+            <small>最近错误会在下方列出</small>
+          </article>
+        </div>
+        <div className="record-list">
+          {(usage.data?.providerRisks ?? []).map((item) => (
+            <article key={item.id}>
+              <div>
+                <strong>
+                  {item.name} · {item.kind === 'text' ? '文本' : '图片'} ·{' '}
+                  <span style={{ color: riskColor[item.risk] }}>{riskLabel[item.risk]}</span>
+                </strong>
+                <small>
+                  {item.defaultModel} · {item.enabled ? '启用' : '禁用'} · {item.note}
+                </small>
+              </div>
+            </article>
+          ))}
+          {usage.data?.recentFailures.map((item) => (
+            <article key={item.id}>
+              <div>
+                <strong>{item.taskType} 失败</strong>
+                <small>
+                  {new Date(item.createdAt).toLocaleString()} · {item.error}
+                </small>
+              </div>
+            </article>
+          ))}
+          {!usage.data?.providerRisks.length && !usage.data?.recentFailures.length ? (
+            <p>暂无风险或失败记录。</p>
+          ) : null}
+        </div>
+      </section>
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -122,28 +207,51 @@ export function SettingsPage() {
           </button>
         </div>
         <div className="record-list">
-          {(providers.data ?? []).map((item) => (
-            <article key={item.id}>
-              <div>
-                <strong>
-                  {item.name} · {item.kind === 'text' ? '文本' : '图片'}
-                </strong>
-                <small>
-                  {item.defaultModel} · {item.hasApiKey ? '已配置 Key' : '无 Key'}
-                </small>
-              </div>
-              <button
-                className="button button--danger"
-                onClick={() =>
-                  void aiSettingsApi
-                    .deleteProvider(item.id)
-                    .then(() => queryClient.invalidateQueries({ queryKey: ['ai-providers'] }))
-                }
-              >
-                删除
-              </button>
-            </article>
-          ))}
+          {(providers.data ?? []).map((item) => {
+            const test = providerTests[item.id];
+            return (
+              <article key={item.id}>
+                <div>
+                  <strong>
+                    {item.name} · {item.kind === 'text' ? '文本' : '图片'}
+                  </strong>
+                  <small>
+                    {item.defaultModel} · {item.hasApiKey ? '已配置 Key' : '无 Key'} ·{' '}
+                    {item.enabled ? '启用' : '禁用'}
+                  </small>
+                  {test ? (
+                    <small>
+                      {test.ok ? '试运行通过' : '试运行未通过'} · {riskLabel[test.risk]} ·{' '}
+                      {test.latencyMs === null ? '未调用模型' : `${test.latencyMs}ms`} ·{' '}
+                      {test.message}
+                    </small>
+                  ) : null}
+                </div>
+                <div className="button-row">
+                  <button
+                    className="button button--quiet"
+                    disabled={testProvider.isPending}
+                    onClick={() => testProvider.mutate(item.id)}
+                  >
+                    试运行
+                  </button>
+                  <button
+                    className="button button--danger"
+                    onClick={() =>
+                      void aiSettingsApi.deleteProvider(item.id).then(() => {
+                        void queryClient.invalidateQueries({ queryKey: ['ai-providers'] });
+                        void queryClient.invalidateQueries({
+                          queryKey: ['ai-usage-summary', projectId],
+                        });
+                      })
+                    }
+                  >
+                    删除
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
       <section className="panel">

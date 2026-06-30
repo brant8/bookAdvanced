@@ -28,7 +28,7 @@ const projectService = new ProjectService(projectRepository, localUser.id);
 const creativeService = new CreativeService(db, localUser.id);
 const workspaceService = new WorkspaceService(db, localUser.id);
 const aiService = new AiService(db, localUser.id, new OpenAiCompatibleProvider());
-const aiSettingsService = new AiSettingsService(db, localUser.id);
+const aiSettingsService = new AiSettingsService(db, localUser.id, new OpenAiCompatibleProvider());
 const creativeGenerationService = new CreativeGenerationService(
   db,
   localUser.id,

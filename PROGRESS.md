@@ -791,14 +791,45 @@
   - Gemma 免费模型可连通，但长 JSON 输出多次出现格式错误。
   - Cohere 免费模型在本轮长章生成中表现最好，但模型仍可能给出需要人工复核的警告。
 
+### T-027 Provider 健康检查、模型试运行与费用面板
+
+- 状态：完成
+- 完成日期：2026-06-29
+- 变更：
+  - 合约层新增 `AiProviderTest` 与 `AiUsageSummary`，统一描述 Provider 试运行、费用风险、生成成功率、运行中任务和最近失败。
+  - API 新增 `GET /ai/usage-summary` 与 `POST /ai/providers/:id/test`。
+  - 文本 Provider 试运行会发起极小 JSON 请求并记录延迟；图片 Provider 健康检查只确认配置与启用状态，不主动生成图片，避免消耗图片额度。
+  - 设置页新增“Provider 健康与费用”面板，可查看成功率、运行中数量、失败数量、Provider 风险说明、最近失败和单个 Provider 试运行结果。
+  - API 服务启动时把 OpenAI-compatible Provider 注入 AI 设置服务，保证真实文本 Provider 可从健康检查路径调用。
+  - 参考 `StoryVerse_Codex_Prompt.md` 中 Claude 给出的框架，确认“导演仪表盘、NVR 时间线、图片流水线、剪纸动画、TTS”方向可实现；它们应作为后续增量任务接在健康/费用/可靠性能力之后。
+- 验证：
+  - `npm run format:check` 通过。
+  - `npm run lint` 通过。
+  - `npm run typecheck` 通过。
+  - `npm test`：14 个测试文件、27 个测试通过。
+  - `DATABASE_URL=postgresql://storyverse:storyverse_dev@localhost:55432/storyverse npm run test:integration`：8 个测试文件、11 个测试通过。
+  - `npm run build` 通过；最大 JS chunk 保持在约 220 KB。
+  - `docker compose up -d --build` 通过；`storyverse-api-1` healthy，Web 监听 `4311`，Postgres 仅监听 `127.0.0.1:55432`。
+  - `/api/health`、`/api/ai/usage-summary`、`/api/ai/providers` 均返回 HTTP 200。
+  - OpenRouter 免费文本 Provider 试运行成功，延迟约 2965 ms，风险识别为 `free`。
+  - OpenRouter 图片 Provider 当前禁用，试运行安全跳过，风险识别为 `disabled`，未触发图片生成。
+  - `npm run test:e2e` 通过。
+- 端口与容器：
+  - 当前其他项目容器占用 `3000`、`3306`、`6379`、`8080`；StoryVerse 使用 `4311`、`4310`、`127.0.0.1:55432`，未与现有容器冲突。
+- 关键决定：
+  - 小成本优先：图片健康检查默认不生成真实图片；费用判断先用本地/免费模型、禁用状态和 Provider 类型做保守分级，后续再接更细的余额/用量查询。
+  - Claude 框架可落地，但不一次性大改；推荐拆为 Director Dashboard、TimelineRail、图片流水线、动画播放器、TTS 等独立任务，逐步并入现有 StoryVerse 架构。
+
 下一推荐任务可连续执行：
 
-1. **T-027：Provider 健康检查、模型试运行与费用面板**
-2. **R-011：章节编辑体验强化，展示 AI 报告、警告、长度与故事线完成度**
-3. **T-026C：账户具备图片额度后完成真实图片生成与素材持久化验收**
-4. **R-009B：连接 NAS 后完成实机部署、备份恢复与重启验收**
+1. **R-011：章节编辑体验强化，展示 AI 报告、警告、长度与故事线完成度**
+2. **T-028：导演仪表盘（Director Dashboard），汇总故事进度、伏笔、素材、AI 队列与风险**
+3. **T-029：NVR 时间线轨道（TimelineRail），作为章节编辑器、分镜播放器和导演仪表盘的共用组件**
+4. **T-030：视觉流水线规划，把角色图、场景图、技能图、图片 Provider 与素材库打通**
+5. **T-026C：账户具备图片额度后完成真实图片生成与素材持久化验收**
+6. **R-009B：连接 NAS 后完成实机部署、备份恢复与重启验收**
 
-下一推荐任务：**T-027 Provider 健康检查、模型试运行与费用面板**；随后执行 **R-011 章节编辑体验强化**。获得 NAS 连接信息后继续 **R-009B**。
+下一推荐任务：**R-011 章节编辑体验强化**；随后可连续执行 **T-028 导演仪表盘** 与 **T-029 NVR 时间线轨道**。获得图片额度后继续 **T-026C**，获得 NAS 信息后继续 **R-009B**。
 
 ## 更新模板
 

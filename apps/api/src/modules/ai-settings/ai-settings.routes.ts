@@ -1,6 +1,8 @@
 import { Hono, type Context } from 'hono';
 
 import {
+  aiProviderTestSchema,
+  aiUsageSummarySchema,
   apiErrorSchema,
   resourceIdParamsSchema,
   saveAiProviderSchema,
@@ -12,6 +14,11 @@ import { AiSettingsNotFoundError, type AiSettingsService } from './ai-settings.s
 export function createAiSettingsRoutes(service: AiSettingsService) {
   const routes = new Hono();
   routes.get('/ai/providers', async (context) => context.json(await service.listProviders()));
+  routes.get('/ai/usage-summary', async (context) =>
+    context.json(
+      aiUsageSummarySchema.parse(await service.usageSummary(context.req.query('projectId'))),
+    ),
+  );
   routes.post('/ai/providers', async (context) => {
     const parsed = saveAiProviderSchema.safeParse(await body(context));
     if (!parsed.success) return error(context, 400, 'Invalid AI Provider configuration.');
@@ -22,6 +29,13 @@ export function createAiSettingsRoutes(service: AiSettingsService) {
     const input = updateAiProviderSchema.safeParse(await body(context));
     if (!id.success || !input.success) return error(context, 400, 'Invalid AI Provider update.');
     return execute(context, () => service.updateProvider(id.data.id, input.data));
+  });
+  routes.post('/ai/providers/:id/test', async (context) => {
+    const id = resourceIdParamsSchema.safeParse(context.req.param());
+    if (!id.success) return error(context, 400, 'Invalid AI Provider id.');
+    return execute(context, async () =>
+      aiProviderTestSchema.parse(await service.testProvider(id.data.id)),
+    );
   });
   routes.delete('/ai/providers/:id', async (context) => {
     const id = resourceIdParamsSchema.safeParse(context.req.param());

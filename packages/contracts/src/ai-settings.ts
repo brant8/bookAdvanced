@@ -51,8 +51,46 @@ export const generationRunSchema = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
+export const aiProviderTestSchema = z.object({
+  id,
+  checkedAt: z.iso.datetime(),
+  latencyMs: z.number().int().min(0).nullable(),
+  message: z.string(),
+  ok: z.boolean(),
+  risk: z.enum(['free', 'low', 'paid', 'disabled', 'unknown']),
+});
+export const aiUsageSummarySchema = z.object({
+  generatedAt: z.iso.datetime(),
+  totalRuns: z.number().int().min(0),
+  statusCounts: z.record(z.string(), z.number().int().min(0)),
+  taskCounts: z.record(z.string(), z.number().int().min(0)),
+  successRate: z.number().min(0).max(1),
+  runningCount: z.number().int().min(0),
+  failedCount: z.number().int().min(0),
+  recentFailures: z.array(
+    z.object({
+      id,
+      taskType: z.string(),
+      error: z.string(),
+      createdAt: z.iso.datetime(),
+    }),
+  ),
+  providerRisks: z.array(
+    z.object({
+      id,
+      name: z.string(),
+      kind: aiProviderKindSchema,
+      enabled: z.boolean(),
+      defaultModel: z.string(),
+      risk: z.enum(['free', 'low', 'paid', 'disabled', 'unknown']),
+      note: z.string(),
+    }),
+  ),
+});
 
 export type AiProvider = z.infer<typeof aiProviderSchema>;
 export type SaveAiProviderInput = z.infer<typeof saveAiProviderSchema>;
 export type UpdateAiProviderInput = z.infer<typeof updateAiProviderSchema>;
 export type GenerationRun = z.infer<typeof generationRunSchema>;
+export type AiProviderTest = z.infer<typeof aiProviderTestSchema>;
+export type AiUsageSummary = z.infer<typeof aiUsageSummarySchema>;
