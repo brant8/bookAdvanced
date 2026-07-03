@@ -4,13 +4,19 @@ import { useRef } from 'react';
 export function TimelineRail({
   chapters,
   height = 72,
+  onPlayheadMove,
   onSelect,
+  playheadRatio = 0,
   selectedNodeId,
+  showPlayhead = false,
 }: {
   chapters: ChapterMeta[];
   height?: number;
+  onPlayheadMove?(ratio: number): void;
   onSelect(nodeId: string): void;
+  playheadRatio?: number;
   selectedNodeId?: string;
+  showPlayhead?: boolean;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
   const drag = useRef({ left: 0, startX: 0, tracking: false });
@@ -73,6 +79,30 @@ export function TimelineRail({
           );
         })}
       </div>
+      {showPlayhead ? (
+        <button
+          aria-label="播放头"
+          className="timeline-rail__playhead"
+          style={{ left: `${Math.min(100, Math.max(0, playheadRatio * 100))}%` }}
+          type="button"
+          onMouseDown={(event) => {
+            event.stopPropagation();
+            const update = (clientX: number) => {
+              const rect = railRef.current?.getBoundingClientRect();
+              if (!rect || !onPlayheadMove) return;
+              onPlayheadMove((clientX - rect.left) / rect.width);
+            };
+            const move = (moveEvent: MouseEvent) => update(moveEvent.clientX);
+            const up = () => {
+              window.removeEventListener('mousemove', move);
+              window.removeEventListener('mouseup', up);
+            };
+            update(event.clientX);
+            window.addEventListener('mousemove', move);
+            window.addEventListener('mouseup', up);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

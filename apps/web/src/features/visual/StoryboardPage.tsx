@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import type { Asset, Storyboard } from '@storyverse/contracts';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 
-import { visualApi } from './visualApi';
+import { TimelineRail } from '../../components/TimelineRail';
 import { aiSettingsApi } from '../workspace/aiSettingsApi';
+import { workspaceApi } from '../workspace/workspaceApi';
+import { visualApi } from './visualApi';
 
 export function StoryboardPage() {
   const { projectId = '' } = useParams();
@@ -11,6 +14,14 @@ export function StoryboardPage() {
   const board = useQuery({
     queryFn: () => visualApi.getStoryboard(projectId),
     queryKey: ['storyboard', projectId],
+  });
+  const chapterMeta = useQuery({
+    queryFn: () => workspaceApi.chapterMeta(projectId),
+    queryKey: ['chapter-meta', projectId],
+  });
+  const assets = useQuery({
+    queryFn: () => visualApi.listAssets(projectId),
+    queryKey: ['assets', projectId],
   });
   const providers = useQuery({
     queryFn: aiSettingsApi.listProviders,
@@ -24,24 +35,35 @@ export function StoryboardPage() {
   });
   const [playing, setPlaying] = useState(false);
   const [index, setIndex] = useState(0);
+  const shots = board.data?.shots ?? [];
+  const shot = shots[index];
+  const selectedNodeId = shot?.storyNodeId ?? '';
+  const playheadRatio = shots.length <= 1 ? 0 : index / (shots.length - 1);
+  const shotAsset = useMemo(
+    () => findShotAsset(board.data, assets.data ?? [], index),
+    [assets.data, board.data, index],
+  );
+
   useEffect(() => {
-    if (!playing || !board.data?.shots[index]) return;
+    if (!playing || !shot) return;
     const timer = window.setTimeout(() => {
-      if (index + 1 >= (board.data?.shots.length ?? 0)) {
+      if (index + 1 >= shots.length) {
         setPlaying(false);
         setIndex(0);
-      } else setIndex(index + 1);
-    }, board.data.shots[index].durationMs);
+      } else {
+        setIndex(index + 1);
+      }
+    }, shot.durationMs);
     return () => window.clearTimeout(timer);
-  }, [board.data, index, playing]);
-  const shot = board.data?.shots[index];
+  }, [index, playing, shot, shots.length]);
+
   return (
     <main className="workspace-page workspace-page--wide">
-      <p className="eyebrow">T-024 / STORYBOARD PLAYER</p>
+      <p className="eyebrow">T-031 / STORYBOARD PLAYER</p>
       <div className="page-heading">
         <div>
-          <h1>AI 分镜播放器</h1>
-          <p>根据故事节点生成定格镜头，并以淡入和平移方式自动播放。</p>
+          <h1>分镜 / 定格播放器</h1>
+          <p>把章节轨道、分镜镜头和素材图层连起来，先用浏览器完成低成本剪纸动画预览。</p>
         </div>
         <div className="button-row">
           <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>
@@ -57,29 +79,68 @@ export function StoryboardPage() {
           </button>
         </div>
       </div>
+      <TimelineRail
+        chapters={chapterMeta.data ?? []}
+        height={86}
+        playheadRatio={playheadRatio}
+        selectedNodeId={selectedNodeId}
+        showPlayhead
+        onPlayheadMove={(ratio) => setIndex(indexFromRatio(ratio, shots.length))}
+        onSelect={(nodeId) => {
+          const nextIndex = shots.findIndex((item) => item.storyNodeId === nodeId);
+          if (nextIndex >= 0) setIndex(nextIndex);
+        }}
+      />
       <section className={`story-player story-player--${shot?.transition ?? 'fade'}`}>
         {shot ? (
           <div key={shot.id} className="story-player__shot">
-            <small>
-              镜头 {index + 1} / {board.data?.shots.length}
-            </small>
-            <h2>{shot.title}</h2>
-            <p>{shot.visualPrompt}</p>
-            <blockquote>{shot.narration}</blockquote>
+            <div className="story-player__stage">
+              <div className="paper-layer paper-layer--back" />
+              {shotAsset ? (
+                <img
+                  className="paper-layer paper-layer--image"
+                  src={shotAsset.url}
+                  alt={shotAsset.name}
+                />
+              ) : (
+                <div className="paper-layer paper-layer--prompt">{shot.visualPrompt}</div>
+              )}
+              <div className="paper-layer paper-layer--front" />
+            </div>
+            <div className="story-player__caption">
+              <small>
+                镜头 {index + 1} / {shots.length} · {shot.durationMs / 1000}s · {shot.transition}
+              </small>
+              <h2>{shot.title}</h2>
+              <p>{shot.visualPrompt}</p>
+              <blockquote>{shot.narration}</blockquote>
+            </div>
           </div>
         ) : (
           <p>先生成故事分镜。</p>
         )}
-        <button
-          className="story-player__play"
-          disabled={!board.data?.shots.length}
-          onClick={() => setPlaying(!playing)}
-        >
-          {playing ? '暂停' : '▶ 播放'}
-        </button>
+        <div className="story-player__controls">
+          <button
+            className="button button--quiet"
+            disabled={!shots.length}
+            onClick={() => setIndex(0)}
+          >
+            回到开头
+          </button>
+          <button className="button" disabled={!shots.length} onClick={() => setPlaying(!playing)}>
+            {playing ? '暂停' : '播放'}
+          </button>
+          <button
+            className="button button--quiet"
+            disabled={!shots.length}
+            onClick={() => setIndex((current) => Math.min(shots.length - 1, current + 1))}
+          >
+            下一镜
+          </button>
+        </div>
       </section>
       <div className="shot-strip">
-        {(board.data?.shots ?? []).map((item, shotIndex) => (
+        {shots.map((item, shotIndex) => (
           <button
             key={item.id}
             className={shotIndex === index ? 'active' : ''}
@@ -91,5 +152,20 @@ export function StoryboardPage() {
         ))}
       </div>
     </main>
+  );
+}
+
+function indexFromRatio(ratio: number, count: number) {
+  if (count <= 1) return 0;
+  return Math.min(count - 1, Math.max(0, Math.round(ratio * (count - 1))));
+}
+
+function findShotAsset(board: Storyboard | null | undefined, assets: Asset[], index: number) {
+  const shot = board?.shots[index];
+  if (!shot) return null;
+  return (
+    assets.find((asset) => asset.id === shot.assetId) ??
+    assets.find((asset) => asset.storyNodeId === shot.storyNodeId && asset.kind === 'scene') ??
+    null
   );
 }

@@ -1484,6 +1484,7 @@ button {
 }
 
 .timeline-rail {
+  position: relative;
   overflow: auto hidden;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -1498,6 +1499,31 @@ button {
     auto;
   cursor: grab;
   user-select: none;
+}
+
+.timeline-rail__playhead {
+  position: absolute;
+  z-index: 3;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border: 0;
+  padding: 0;
+  background: var(--color-danger);
+  box-shadow: 0 0 16px rgb(255 107 107 / 60%);
+  cursor: ew-resize;
+}
+
+.timeline-rail__playhead::before {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  content: '';
+  transform: translateX(-50%);
 }
 
 .timeline-rail:active {
@@ -1739,21 +1765,22 @@ button {
 
 .story-player {
   position: relative;
-  display: grid;
-  min-height: 480px;
+  display: block;
+  min-height: 560px;
   overflow: hidden;
-  place-items: center;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 50px;
+  padding: 24px;
   background:
     radial-gradient(circle at 50% 30%, rgb(124 106 247 / 22%), transparent 26rem),
     linear-gradient(160deg, #171326, #09080f);
 }
 
 .story-player__shot {
-  max-width: 680px;
-  text-align: center;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  align-items: stretch;
   animation: storyboard-fade 700ms ease both;
 }
 
@@ -1767,10 +1794,80 @@ button {
   line-height: 1.8;
 }
 
-.story-player__play {
+.story-player__stage {
+  position: relative;
+  min-height: 430px;
+  overflow: hidden;
+  border: 1px solid rgb(184 169 255 / 20%);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 30% 20%, rgb(78 205 196 / 16%), transparent 18rem),
+    linear-gradient(145deg, #201a34, #0a0910);
+  box-shadow: inset 0 0 60px rgb(0 0 0 / 42%);
+}
+
+.paper-layer {
   position: absolute;
-  right: 20px;
-  bottom: 20px;
+  inset: 0;
+}
+
+.paper-layer--back {
+  background:
+    linear-gradient(120deg, transparent 0 40%, rgb(124 106 247 / 16%) 40% 42%, transparent 42%),
+    radial-gradient(circle at 70% 20%, rgb(255 209 102 / 14%), transparent 10rem);
+  animation: paper-float 5s ease-in-out infinite alternate;
+}
+
+.paper-layer--image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.82) contrast(1.04);
+  animation: paper-pan 7s ease-in-out infinite alternate;
+}
+
+.paper-layer--prompt {
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  color: var(--text-secondary);
+  background: rgb(255 255 255 / 3%);
+  font-family: var(--font-reading);
+  line-height: 1.8;
+  text-align: center;
+}
+
+.paper-layer--front {
+  border: 1px solid rgb(255 255 255 / 8%);
+  background:
+    linear-gradient(0deg, rgb(0 0 0 / 42%), transparent 36%),
+    linear-gradient(90deg, rgb(0 0 0 / 34%), transparent 22%, transparent 78%, rgb(0 0 0 / 34%));
+  pointer-events: none;
+}
+
+.story-player__caption {
+  align-self: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  background: rgb(0 0 0 / 24%);
+}
+
+.story-player__caption small {
+  color: var(--brand-secondary);
+  font-family: var(--font-mono);
+}
+
+.story-player__caption p {
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+.story-player__controls {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 18px;
 }
 
 .shot-strip {
@@ -1813,6 +1910,24 @@ button {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes paper-float {
+  from {
+    transform: translate(-10px, -8px) scale(1.02);
+  }
+  to {
+    transform: translate(12px, 8px) scale(1.05);
+  }
+}
+
+@keyframes paper-pan {
+  from {
+    transform: scale(1.02) translateX(-10px);
+  }
+  to {
+    transform: scale(1.08) translateX(10px);
   }
 }
 
