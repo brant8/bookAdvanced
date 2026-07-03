@@ -1598,6 +1598,52 @@ button {
   font-size: 1.45rem;
 }
 
+.visual-pipeline {
+  background: linear-gradient(135deg, rgb(78 205 196 / 6%), transparent 42%), var(--bg-secondary);
+}
+
+.visual-pipeline__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.visual-pipeline__grid label,
+.visual-pipeline__prompt {
+  display: grid;
+  gap: 6px;
+}
+
+.visual-pipeline__prompt {
+  margin-top: 14px;
+}
+
+.visual-pipeline__prompt textarea {
+  min-height: 126px;
+}
+
+.visual-pipeline__summary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.visual-pipeline__summary .panel {
+  margin: 0;
+  padding: 16px;
+}
+
+.visual-pipeline__summary span {
+  color: var(--text-secondary);
+}
+
+.visual-pipeline__summary strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-primary);
+  font-size: 1.55rem;
+}
+
 .ai-candidate-panel {
   margin-bottom: 16px;
   background: linear-gradient(135deg, rgb(78 205 196 / 6%), transparent 42%), var(--bg-panel);

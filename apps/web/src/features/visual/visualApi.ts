@@ -36,11 +36,19 @@ export const visualApi = {
     ),
   listAssets: async (projectId: string) =>
     list(assetSchema, await apiRequest(`/projects/${projectId}/assets`)),
-  uploadAsset: async (projectId: string, file: File, name: string, kind: string) => {
+  uploadAsset: async (
+    projectId: string,
+    file: File,
+    name: string,
+    kind: string,
+    links?: { characterId?: string; storyNodeId?: string },
+  ) => {
     const form = new FormData();
     form.set('file', file);
     form.set('name', name);
     form.set('kind', kind);
+    if (links?.characterId) form.set('characterId', links.characterId);
+    if (links?.storyNodeId) form.set('storyNodeId', links.storyNodeId);
     return assetSchema.parse(
       await apiRequest(`/projects/${projectId}/assets/upload`, { body: form, method: 'POST' }),
     );

@@ -46,11 +46,18 @@ export function createVisualRoutes(service: VisualService) {
     const file = form.get('file');
     const kind = assetKindSchema.safeParse(form.get('kind'));
     const name = form.get('name');
+    const characterId = form.get('characterId');
+    const storyNodeId = form.get('storyNodeId');
     if (!(file instanceof File) || !kind.success || typeof name !== 'string') {
       return error(context, 400, 'Invalid asset upload.');
     }
     return context.json(
-      await service.upload(params.data.projectId, file, { kind: kind.data, name }),
+      await service.upload(params.data.projectId, file, {
+        characterId: typeof characterId === 'string' && characterId ? characterId : undefined,
+        kind: kind.data,
+        name,
+        storyNodeId: typeof storyNodeId === 'string' && storyNodeId ? storyNodeId : undefined,
+      }),
       201,
     );
   });
