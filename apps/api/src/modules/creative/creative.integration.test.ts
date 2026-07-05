@@ -73,6 +73,14 @@ describe('Creative workspace API integration', () => {
     const hero = characterSchema.parse(
       await json(`/projects/${projectId}/characters`, 'POST', { name: '林岚' }),
     );
+    const updatedHero = characterSchema.parse(
+      await json(`/characters/${hero.id}`, 'PATCH', {
+        voiceSamples: [
+          '声线：冷静克制，语速偏慢，关键句保留短暂停顿',
+          '样本：我记得失去记忆之前，自己已经选择了代价。',
+        ],
+      }),
+    );
     const guide = characterSchema.parse(
       await json(`/projects/${projectId}/characters`, 'POST', { name: '守门人' }),
     );
@@ -110,6 +118,8 @@ describe('Creative workspace API integration', () => {
 
     expect(node.characterIds).toEqual(expect.arrayContaining([hero.id, guide.id]));
     expect(node.loreEntryIds).toEqual([lore.id]);
+    expect(updatedHero.voiceSamples).toHaveLength(2);
+    expect(updatedHero.voiceSamples[0]).toContain('冷静克制');
     expect(relation.projectId).toBe(projectId);
     expect(rule.projectId).toBe(projectId);
   });

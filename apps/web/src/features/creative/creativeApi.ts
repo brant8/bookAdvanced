@@ -16,6 +16,7 @@ import {
   type CreateStoryNodeInput,
   type CreateStoryNodeEdgeInput,
   type CreateWorldRuleInput,
+  type UpdateCharacterInput,
   type UpdateStoryNodeInput,
   type UpsertStoryBibleInput,
 } from '@storyverse/contracts';
@@ -71,6 +72,13 @@ export const creativeApi = {
       await apiRequest(`/projects/${projectId}/characters`, {
         body: JSON.stringify(input),
         method: 'POST',
+      }),
+    ),
+  updateCharacter: async (id: string, input: UpdateCharacterInput) =>
+    characterSchema.parse(
+      await apiRequest(`/characters/${id}`, {
+        body: JSON.stringify(input),
+        method: 'PATCH',
       }),
     ),
   deleteCharacter: (id: string) => apiRequest(`/characters/${id}`, { method: 'DELETE' }),

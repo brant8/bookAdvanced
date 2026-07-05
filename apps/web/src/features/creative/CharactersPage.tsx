@@ -24,6 +24,8 @@ export function CharactersPage() {
   const [name, setName] = useState('');
   const [relation, setRelation] = useState({ sourceCharacterId: '', targetCharacterId: '' });
   const [ability, setAbility] = useState({ characterId: '', name: '' });
+  const [voiceCharacterId, setVoiceCharacterId] = useState('');
+  const [voiceDraft, setVoiceDraft] = useState('');
   const createCharacter = useMutation({
     mutationFn: () => creativeApi.createCharacter(projectId, { name }),
     onSuccess: async () => {
@@ -35,7 +37,39 @@ export function CharactersPage() {
     mutationFn: () => creativeApi.createRelation(projectId, { ...relation, relationType: '关联' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['relations', projectId] }),
   });
+  const updateVoiceSamples = useMutation({
+    mutationFn: () =>
+      creativeApi.updateCharacter(voiceCharacterId, {
+        voiceSamples: voiceDraft
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .slice(0, 10),
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['characters', projectId] });
+    },
+  });
   const names = new Map((characters.data ?? []).map((item) => [item.id, item.name]));
+  const selectedVoiceCharacter = (characters.data ?? []).find(
+    (item) => item.id === voiceCharacterId,
+  );
+  const loadVoiceSamples = (characterId: string) => {
+    const character = (characters.data ?? []).find((item) => item.id === characterId);
+    setVoiceCharacterId(characterId);
+    setVoiceDraft((character?.voiceSamples ?? []).join('\n'));
+  };
+  const createVoiceStarter = () => {
+    if (!selectedVoiceCharacter) {
+      return;
+    }
+    const starter = [
+      `声线：${selectedVoiceCharacter.personality || '根据角色性格补充语气、节奏和情绪底色'}`,
+      `样本：${selectedVoiceCharacter.name}在关键冲突中说出一句能代表人物立场的话。`,
+      'TTS提示：保持角色一致性，避免过度夸张；旁白和对白分轨时优先使用此声线。',
+    ];
+    setVoiceDraft(starter.join('\n'));
+  };
   return (
     <main className="workspace-page">
       <p className="eyebrow">T-007 / CHARACTERS</p>
@@ -73,6 +107,13 @@ export function CharactersPage() {
             <article key={item.id}>
               <h3>{item.name}</h3>
               <p>{item.bio || '等待补充人物小传'}</p>
+              <div className="voice-status">
+                <span>{item.voiceSamples.length > 0 ? '已配置声音' : '未配置声音'}</span>
+                <strong>{item.voiceSamples.length}/10</strong>
+              </div>
+              {item.voiceSamples.length > 0 ? (
+                <p className="voice-preview">{item.voiceSamples.slice(0, 2).join(' / ')}</p>
+              ) : null}
               <button
                 className="button button--quiet"
                 onClick={() =>
@@ -88,6 +129,57 @@ export function CharactersPage() {
             </article>
           ))}
         </div>
+      </section>
+      <section className="panel voice-workbench">
+        <div>
+          <p className="eyebrow">T-032 / VOICE LAB</p>
+          <h2>TTS 与角色声音样本</h2>
+          <p>
+            先用本地文本样本建立角色声线。后续接入免费或自托管 TTS
+            时，可以直接把这些样本作为声线提示、 试听台词和分镜配音依据，不强制调用付费模型。
+          </p>
+        </div>
+        <div className="voice-workbench__grid">
+          <label>
+            选择角色
+            <select
+              value={voiceCharacterId}
+              onChange={(event) => loadVoiceSamples(event.target.value)}
+            >
+              <option value="">选择角色</option>
+              {(characters.data ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            声音样本与 TTS 提示（每行一条，最多 10 条）
+            <textarea
+              value={voiceDraft}
+              onChange={(event) => setVoiceDraft(event.target.value)}
+              placeholder="声线：冷静、低声、语速慢&#10;样本：我不是在逃，我是在等答案自己浮上来。&#10;TTS提示：对白使用近距离麦克风感，避免机械停顿。"
+            />
+          </label>
+        </div>
+        <div className="button-row">
+          <button
+            className="button button--quiet"
+            disabled={!selectedVoiceCharacter}
+            onClick={createVoiceStarter}
+          >
+            生成本地起稿
+          </button>
+          <button
+            className="button"
+            disabled={!voiceCharacterId || updateVoiceSamples.isPending}
+            onClick={() => updateVoiceSamples.mutate()}
+          >
+            保存声音样本
+          </button>
+        </div>
+        {updateVoiceSamples.isSuccess ? <p className="voice-note">声音样本已保存。</p> : null}
       </section>
       <section className="panel">
         <h2>角色技能</h2>
