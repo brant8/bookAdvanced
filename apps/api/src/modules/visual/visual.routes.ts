@@ -92,8 +92,16 @@ export function createVisualRoutes(service: VisualService) {
     project((id) => service.getTtsDubbingPlan(id)),
   );
   routes.get(
+    '/projects/:projectId/storyboard/tts-provider-reservation',
+    project((id) => service.getTtsProviderReservation(id)),
+  );
+  routes.get(
     '/projects/:projectId/storyboard/worker-queue',
     project((id) => service.getStoryboardWorkerQueue(id)),
+  );
+  routes.post(
+    '/projects/:projectId/storyboard/worker-queue/dry-run',
+    project((id) => service.dryRunStoryboardWorker(id)),
   );
   routes.post(
     '/projects/:projectId/storyboard/generate',

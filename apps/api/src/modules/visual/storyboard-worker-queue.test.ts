@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { StoryboardExportPlan, TtsDubbingPlan } from '@storyverse/contracts';
 
-import { buildStoryboardWorkerQueue } from './visual.service.js';
+import {
+  buildStoryboardWorkerDryRunManifest,
+  buildStoryboardWorkerQueue,
+} from './visual.service.js';
 
 const now = new Date('2026-07-15T00:00:00.000Z').toISOString();
 const projectId = '00000000-0000-4000-8000-000000000201';
@@ -26,6 +29,34 @@ describe('buildStoryboardWorkerQueue', () => {
     expect(queue.warnings).toHaveLength(0);
     expect(queue.tasks.find((task) => task.id === 'resolve-assets')?.status).toBe('ready');
     expect(queue.tasks.find((task) => task.id === 'mux-preview')?.status).toBe('planned');
+  });
+
+  it('creates a dry-run manifest without rendering media files', () => {
+    const queue = buildStoryboardWorkerQueue(projectId, exportPlan(0), ttsPlan(1));
+    const manifest = buildStoryboardWorkerDryRunManifest(queue);
+
+    expect(manifest.dryRun).toBe(true);
+    expect(manifest.manifestPath).toContain('storyboard-export.dry-run.json');
+    expect(manifest.executedTaskIds).toContain('prepare-directories');
+    expect(manifest.skippedTaskIds).toContain('render-frame-sequence');
+    expect(manifest.artifacts.find((item) => item.sourceTaskId === 'mux-preview')?.status).toBe(
+      'skipped',
+    );
+    expect(manifest.warnings).toContain(
+      'Dry-run only writes a manifest preview; it does not render frames, audio or video.',
+    );
+  });
+
+  it('keeps blocked tasks visible in the dry-run manifest', () => {
+    const queue = buildStoryboardWorkerQueue(projectId, exportPlan(1), ttsPlan(0));
+    const manifest = buildStoryboardWorkerDryRunManifest(queue);
+
+    expect(manifest.status).toBe('blocked');
+    expect(manifest.blockedTaskIds).toContain('resolve-assets');
+    expect(manifest.blockedTaskIds).toContain('prepare-audio');
+    expect(manifest.artifacts.find((item) => item.sourceTaskId === 'prepare-audio')?.status).toBe(
+      'blocked',
+    );
   });
 });
 

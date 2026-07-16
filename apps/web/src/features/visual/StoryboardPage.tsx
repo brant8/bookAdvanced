@@ -32,6 +32,10 @@ export function StoryboardPage() {
     queryFn: () => visualApi.getTtsDubbingPlan(projectId),
     queryKey: ['storyboard-tts-plan', projectId],
   });
+  const ttsReservation = useQuery({
+    queryFn: () => visualApi.getTtsProviderReservation(projectId),
+    queryKey: ['storyboard-tts-provider-reservation', projectId],
+  });
   const workerQueue = useQuery({
     queryFn: () => visualApi.getStoryboardWorkerQueue(projectId),
     queryKey: ['storyboard-worker-queue', projectId],
@@ -47,7 +51,15 @@ export function StoryboardPage() {
     onSuccess: async (value) => {
       queryClient.setQueryData(['storyboard', projectId], value);
       await queryClient.invalidateQueries({ queryKey: ['storyboard-export-plan', projectId] });
+      await queryClient.invalidateQueries({ queryKey: ['storyboard-tts-plan', projectId] });
+      await queryClient.invalidateQueries({
+        queryKey: ['storyboard-tts-provider-reservation', projectId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['storyboard-worker-queue', projectId] });
     },
+  });
+  const dryRunWorker = useMutation({
+    mutationFn: () => visualApi.dryRunStoryboardWorker(projectId),
   });
   const [playing, setPlaying] = useState(false);
   const [index, setIndex] = useState(0);
@@ -313,6 +325,73 @@ export function StoryboardPage() {
           <p className="notice">正在准备 TTS 配音计划。</p>
         )}
       </section>
+      <section className="panel tts-reservation-panel">
+        <div className="section-heading">
+          <div>
+            <h2>TTS Provider 与音频素材库预留</h2>
+            <p>
+              这里先固定免费优先、密钥存储、模型选择和音频文件边界；真正新增音频表和付费 Provider
+              要等工作流稳定后再做。
+            </p>
+          </div>
+          <span>{ttsReservation.data?.audioLibrary.rootPath ?? '准备中'}</span>
+        </div>
+        {ttsReservation.data ? (
+          <>
+            <div className="worker-queue-summary">
+              <article>
+                <span>音频根目录</span>
+                <strong>{ttsReservation.data.audioLibrary.artifactTypes.length}</strong>
+                <p>{ttsReservation.data.audioLibrary.rootPath}</p>
+              </article>
+              <article>
+                <span>Manifest</span>
+                <strong>JSON</strong>
+                <p>{ttsReservation.data.audioLibrary.manifestPath}</p>
+              </article>
+              <article>
+                <span>成本策略</span>
+                <strong>Free First</strong>
+                <p>{ttsReservation.data.costPolicy}</p>
+              </article>
+            </div>
+            <div className="tts-provider-grid">
+              {ttsReservation.data.providerSlots.map((provider) => (
+                <article key={provider.id}>
+                  <span>
+                    {provider.mode} · {provider.keyStorage}
+                  </span>
+                  <strong>{provider.label}</strong>
+                  <p>{provider.modelSelection}</p>
+                  <small>{provider.requiredBeforeEnable.join(' · ')}</small>
+                </article>
+              ))}
+            </div>
+            <div className="storyboard-export-columns">
+              <article>
+                <h3>素材库规则</h3>
+                <ul>
+                  <li>{ttsReservation.data.audioLibrary.namingPattern}</li>
+                  <li>{ttsReservation.data.audioLibrary.retentionPolicy}</li>
+                  {ttsReservation.data.audioLibrary.consentNotes.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+              <article>
+                <h3>后续接入步骤</h3>
+                <ul>
+                  {ttsReservation.data.nextSteps.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+          </>
+        ) : (
+          <p className="notice">正在准备 TTS Provider 预留计划。</p>
+        )}
+      </section>
       <section className="panel worker-queue-panel">
         <div className="section-heading">
           <div>
@@ -361,6 +440,38 @@ export function StoryboardPage() {
                 </article>
               ))}
             </div>
+            <div className="worker-dry-run">
+              <button className="button" onClick={() => dryRunWorker.mutate()}>
+                Worker Dry-run 写 Manifest
+              </button>
+              <p>只预演目录、JSON、帧序列、音频和预览视频产物；不启动 FFmpeg、不生成真实视频。</p>
+            </div>
+            {dryRunWorker.data ? (
+              <div className="worker-manifest">
+                <div>
+                  <span>Dry-run Manifest</span>
+                  <strong>{dryRunWorker.data.status}</strong>
+                  <p>{dryRunWorker.data.manifestPath}</p>
+                </div>
+                <div>
+                  <span>执行 / 阻塞 / 跳过</span>
+                  <strong>
+                    {dryRunWorker.data.executedTaskIds.length} /{' '}
+                    {dryRunWorker.data.blockedTaskIds.length} /{' '}
+                    {dryRunWorker.data.skippedTaskIds.length}
+                  </strong>
+                  <p>{dryRunWorker.data.warnings.join(' / ')}</p>
+                </div>
+                <ul>
+                  {dryRunWorker.data.artifacts.map((artifact) => (
+                    <li key={`${artifact.sourceTaskId}-${artifact.path}`}>
+                      {artifact.sourceTaskId} · {artifact.kind} · {artifact.status} ·{' '}
+                      {artifact.path}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </>
         ) : (
           <p className="notice">正在生成 Worker 队列。</p>

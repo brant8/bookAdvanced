@@ -12,8 +12,10 @@ import type {
   Scene,
   Storyboard,
   StoryboardExportPlan,
+  StoryboardWorkerDryRunManifest,
   StoryboardWorkerQueue,
   TtsDubbingPlan,
+  TtsProviderReservation,
   UpsertSceneInput,
 } from '@storyverse/contracts';
 
@@ -414,6 +416,11 @@ export class VisualService {
     return buildTtsDubbingPlan(projectId, storyboard, characterRows);
   }
 
+  async getTtsProviderReservation(projectId: string): Promise<TtsProviderReservation> {
+    const ttsPlan = await this.getTtsDubbingPlan(projectId);
+    return buildTtsProviderReservation(projectId, ttsPlan);
+  }
+
   async getStoryboardWorkerQueue(projectId: string): Promise<StoryboardWorkerQueue> {
     await this.assertProject(projectId);
     const [exportPlan, ttsPlan] = await Promise.all([
@@ -421,6 +428,10 @@ export class VisualService {
       this.getTtsDubbingPlan(projectId),
     ]);
     return buildStoryboardWorkerQueue(projectId, exportPlan, ttsPlan);
+  }
+
+  async dryRunStoryboardWorker(projectId: string): Promise<StoryboardWorkerDryRunManifest> {
+    return buildStoryboardWorkerDryRunManifest(await this.getStoryboardWorkerQueue(projectId));
   }
 
   private async ownedNode(nodeId: string) {
@@ -664,6 +675,73 @@ export function buildTtsDubbingPlan(
   };
 }
 
+export function buildTtsProviderReservation(
+  projectId: string,
+  ttsPlan: TtsDubbingPlan,
+): TtsProviderReservation {
+  return {
+    audioLibrary: {
+      artifactTypes: ttsPlan.audioLibrary.artifactTypes,
+      consentNotes: [
+        'Store only voices and generated audio that the author has rights to use.',
+        'Voice cloning must require an explicit consent record before being enabled.',
+        'Paid or third-party TTS output should keep provider, model and cost metadata.',
+      ],
+      manifestPath: `${ttsPlan.audioLibrary.suggestedPath}/${projectId}/audio-manifest.json`,
+      namingPattern: '{projectId}/{shotSortOrder}-{voiceSlug}-{artifactType}.wav',
+      retentionPolicy:
+        'Keep local/NAS audio artifacts until the storyboard export is accepted; allow manual cleanup before cloud migration.',
+      rootPath: `${ttsPlan.audioLibrary.suggestedPath}/${projectId}`,
+    },
+    costPolicy:
+      'Keep browser preview free by default; enable local/self-hosted TTS before paid cloud models; require per-run budget warnings for paid providers.',
+    generatedAt: new Date().toISOString(),
+    nextSteps: [
+      'Add a real audio asset table only when generated audio files need persistence beyond the manifest.',
+      'Reuse encrypted provider settings for paid TTS keys instead of placing keys in storyboard data.',
+      'Expose model selection and estimated cost before any batch render starts.',
+      'Let the future NAS Worker read this reservation and write audio artifacts into the local/NAS audio library.',
+    ],
+    projectId,
+    providerSlots: ttsPlan.providerOptions.map((provider) => ({
+      costGuardrails:
+        provider.risk === 'paid'
+          ? [
+              'Require an explicit per-run budget cap.',
+              'Show estimated character count and provider pricing before render.',
+              'Block batch rendering when no API key or model is selected.',
+            ]
+          : [
+              'Prefer offline or local execution.',
+              'Never require an API key for preview timing checks.',
+              'Allow single-shot trials before batch rendering.',
+            ],
+      id: provider.id,
+      keyStorage:
+        provider.mode === 'paid'
+          ? 'encrypted-provider-settings'
+          : provider.mode === 'browser'
+            ? 'none'
+            : 'local-env',
+      label: provider.label,
+      mode: provider.mode,
+      modelSelection:
+        provider.mode === 'browser'
+          ? 'Use installed browser/OS voices'
+          : provider.mode === 'paid'
+            ? 'Choose provider model in AI Settings before rendering'
+            : 'Choose a local TTS model or compatible HTTP endpoint',
+      requiredBeforeEnable:
+        provider.mode === 'paid'
+          ? ['API key', 'model id', 'budget cap', 'voice consent policy']
+          : provider.mode === 'browser'
+            ? ['browser support']
+            : ['local endpoint path', 'voice model files', 'NAS audio mount'],
+      status: provider.status,
+    })),
+  };
+}
+
 export function buildStoryboardWorkerQueue(
   projectId: string,
   exportPlan: StoryboardExportPlan | null,
@@ -762,4 +840,69 @@ export function buildStoryboardWorkerQueue(
     ],
     warnings,
   };
+}
+
+export function buildStoryboardWorkerDryRunManifest(
+  queue: StoryboardWorkerQueue,
+): StoryboardWorkerDryRunManifest {
+  const readyTaskIds = queue.tasks.filter((task) => task.status === 'ready').map((task) => task.id);
+  const blockedTaskIds = queue.tasks
+    .filter((task) => task.status === 'blocked')
+    .map((task) => task.id);
+  const plannedTaskIds = queue.tasks
+    .filter((task) => task.status === 'planned')
+    .map((task) => task.id);
+  return {
+    artifacts: queue.tasks.map((task) => {
+      const outputPath =
+        Object.values(task.output)
+          .map((value) => String(value))
+          .find(Boolean) ?? `${queue.rootPath}/${task.id}.json`;
+      return {
+        kind: artifactKind(task.type),
+        path: outputPath,
+        sourceTaskId: task.id,
+        status:
+          task.status === 'ready'
+            ? ('would-create' as const)
+            : task.status === 'blocked'
+              ? ('blocked' as const)
+              : ('skipped' as const),
+      };
+    }),
+    blockedTaskIds,
+    dryRun: true,
+    executedTaskIds: readyTaskIds,
+    generatedAt: new Date().toISOString(),
+    manifestPath: `${queue.outputPath}/storyboard-export.dry-run.json`,
+    outputPath: queue.outputPath,
+    projectId: queue.projectId,
+    queueName: queue.queueName,
+    rootPath: queue.rootPath,
+    skippedTaskIds: plannedTaskIds,
+    status: queue.status,
+    storyboardId: queue.storyboardId,
+    warnings: [
+      ...queue.warnings,
+      'Dry-run only writes a manifest preview; it does not render frames, audio or video.',
+    ],
+  };
+}
+
+function artifactKind(
+  taskType: StoryboardWorkerQueue['tasks'][number]['type'],
+): StoryboardWorkerDryRunManifest['artifacts'][number]['kind'] {
+  switch (taskType) {
+    case 'prepare-directories':
+      return 'directory';
+    case 'render-frame-sequence':
+      return 'frames';
+    case 'prepare-audio':
+      return 'audio';
+    case 'mux-preview':
+      return 'preview-video';
+    case 'resolve-assets':
+    case 'write-manifest':
+      return 'json';
+  }
 }

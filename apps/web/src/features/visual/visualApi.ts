@@ -4,8 +4,10 @@ import {
   sceneSchema,
   storyboardSchema,
   storyboardExportPlanSchema,
+  storyboardWorkerDryRunManifestSchema,
   storyboardWorkerQueueSchema,
   ttsDubbingPlanSchema,
+  ttsProviderReservationSchema,
   type CreateCharacterAbilityInput,
   type GenerateImageInput,
   type UpsertSceneInput,
@@ -75,9 +77,19 @@ export const visualApi = {
   },
   getTtsDubbingPlan: async (projectId: string) =>
     ttsDubbingPlanSchema.parse(await apiRequest(`/projects/${projectId}/storyboard/tts-plan`)),
+  getTtsProviderReservation: async (projectId: string) =>
+    ttsProviderReservationSchema.parse(
+      await apiRequest(`/projects/${projectId}/storyboard/tts-provider-reservation`),
+    ),
   getStoryboardWorkerQueue: async (projectId: string) =>
     storyboardWorkerQueueSchema.parse(
       await apiRequest(`/projects/${projectId}/storyboard/worker-queue`),
+    ),
+  dryRunStoryboardWorker: async (projectId: string) =>
+    storyboardWorkerDryRunManifestSchema.parse(
+      await apiRequest(`/projects/${projectId}/storyboard/worker-queue/dry-run`, {
+        method: 'POST',
+      }),
     ),
   generateStoryboard: async (projectId: string, providerId?: string) =>
     storyboardSchema.parse(

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Storyboard } from '@storyverse/contracts';
 
-import { buildTtsDubbingPlan } from './visual.service.js';
+import { buildTtsDubbingPlan, buildTtsProviderReservation } from './visual.service.js';
 
 const now = new Date('2026-07-15T00:00:00.000Z').toISOString();
 const projectId = '00000000-0000-4000-8000-000000000101';
@@ -61,5 +61,24 @@ describe('buildTtsDubbingPlan', () => {
     expect(plan.voiceReadiness[0]?.status).toBe('needs-samples');
     expect(plan.dubbingQueue).toHaveLength(0);
     expect(plan.audioLibrary.status).toBe('planned');
+  });
+
+  it('reserves audio library paths and paid provider guardrails without adding a real provider', () => {
+    const plan = buildTtsDubbingPlan(projectId, null, [
+      { id: characterId, name: 'Navigator', voiceSamples: [] },
+    ]);
+    const reservation = buildTtsProviderReservation(projectId, plan);
+
+    expect(reservation.audioLibrary.rootPath).toContain(projectId);
+    expect(reservation.audioLibrary.manifestPath).toContain('audio-manifest.json');
+    expect(reservation.providerSlots.find((slot) => slot.mode === 'browser')?.keyStorage).toBe(
+      'none',
+    );
+    expect(reservation.providerSlots.find((slot) => slot.mode === 'paid')?.keyStorage).toBe(
+      'encrypted-provider-settings',
+    );
+    expect(
+      reservation.providerSlots.find((slot) => slot.mode === 'paid')?.costGuardrails,
+    ).toContain('Require an explicit per-run budget cap.');
   });
 });

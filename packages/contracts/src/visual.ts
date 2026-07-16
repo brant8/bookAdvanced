@@ -207,6 +207,55 @@ export const storyboardWorkerQueueSchema = z.object({
     }),
   ),
 });
+export const ttsProviderReservationSchema = z.object({
+  projectId: id,
+  generatedAt: z.iso.datetime(),
+  costPolicy: z.string(),
+  audioLibrary: z.object({
+    rootPath: z.string(),
+    manifestPath: z.string(),
+    artifactTypes: z.array(z.string()),
+    namingPattern: z.string(),
+    retentionPolicy: z.string(),
+    consentNotes: z.array(z.string()),
+  }),
+  providerSlots: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      mode: z.enum(['browser', 'local', 'self-hosted', 'paid']),
+      status: z.enum(['available', 'planned', 'deferred']),
+      keyStorage: z.enum(['none', 'local-env', 'encrypted-provider-settings']),
+      modelSelection: z.string(),
+      costGuardrails: z.array(z.string()),
+      requiredBeforeEnable: z.array(z.string()),
+    }),
+  ),
+  nextSteps: z.array(z.string()),
+});
+export const storyboardWorkerDryRunManifestSchema = z.object({
+  projectId: id,
+  storyboardId: id.nullable(),
+  generatedAt: z.iso.datetime(),
+  queueName: z.string(),
+  dryRun: z.literal(true),
+  status: z.enum(['ready', 'blocked']),
+  rootPath: z.string(),
+  outputPath: z.string(),
+  manifestPath: z.string(),
+  executedTaskIds: z.array(z.string()),
+  blockedTaskIds: z.array(z.string()),
+  skippedTaskIds: z.array(z.string()),
+  warnings: z.array(z.string()),
+  artifacts: z.array(
+    z.object({
+      kind: z.enum(['directory', 'json', 'frames', 'audio', 'preview-video']),
+      path: z.string(),
+      sourceTaskId: z.string(),
+      status: z.enum(['would-create', 'blocked', 'skipped']),
+    }),
+  ),
+});
 
 export type Scene = z.infer<typeof sceneSchema>;
 export type UpsertSceneInput = z.infer<typeof upsertSceneSchema>;
@@ -218,3 +267,5 @@ export type Storyboard = z.infer<typeof storyboardSchema>;
 export type StoryboardExportPlan = z.infer<typeof storyboardExportPlanSchema>;
 export type TtsDubbingPlan = z.infer<typeof ttsDubbingPlanSchema>;
 export type StoryboardWorkerQueue = z.infer<typeof storyboardWorkerQueueSchema>;
+export type TtsProviderReservation = z.infer<typeof ttsProviderReservationSchema>;
+export type StoryboardWorkerDryRunManifest = z.infer<typeof storyboardWorkerDryRunManifestSchema>;
