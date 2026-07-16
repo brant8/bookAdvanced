@@ -4,6 +4,7 @@ import {
   sceneSchema,
   storyboardSchema,
   storyboardExportPlanSchema,
+  ttsDubbingPlanSchema,
   type CreateCharacterAbilityInput,
   type GenerateImageInput,
   type UpsertSceneInput,
@@ -71,6 +72,8 @@ export const visualApi = {
     const value = await apiRequest(`/projects/${projectId}/storyboard/export-plan`);
     return value === null ? null : storyboardExportPlanSchema.parse(value);
   },
+  getTtsDubbingPlan: async (projectId: string) =>
+    ttsDubbingPlanSchema.parse(await apiRequest(`/projects/${projectId}/storyboard/tts-plan`)),
   generateStoryboard: async (projectId: string, providerId?: string) =>
     storyboardSchema.parse(
       await apiRequest(`/projects/${projectId}/storyboard/generate`, {

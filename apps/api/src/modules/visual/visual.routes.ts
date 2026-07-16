@@ -87,6 +87,10 @@ export function createVisualRoutes(service: VisualService) {
     '/projects/:projectId/storyboard/export-plan',
     project((id) => service.getStoryboardExportPlan(id)),
   );
+  routes.get(
+    '/projects/:projectId/storyboard/tts-plan',
+    project((id) => service.getTtsDubbingPlan(id)),
+  );
   routes.post(
     '/projects/:projectId/storyboard/generate',
     projectBody(generateStoryboardSchema, (id, input) =>

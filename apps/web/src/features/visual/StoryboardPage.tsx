@@ -28,6 +28,10 @@ export function StoryboardPage() {
     queryFn: () => visualApi.getStoryboardExportPlan(projectId),
     queryKey: ['storyboard-export-plan', projectId],
   });
+  const ttsPlan = useQuery({
+    queryFn: () => visualApi.getTtsDubbingPlan(projectId),
+    queryKey: ['storyboard-tts-plan', projectId],
+  });
   const providers = useQuery({
     queryFn: aiSettingsApi.listProviders,
     queryKey: ['ai-providers'],
@@ -229,6 +233,82 @@ export function StoryboardPage() {
           <p className="notice">先生成分镜后再查看导出规划。</p>
         )}
       </section>
+      <section className="panel tts-plan-panel">
+        <div className="section-heading">
+          <div>
+            <h2>TTS 配音计划</h2>
+            <p>
+              先用浏览器本地试听校准节奏；真实音频生成、音频素材库和付费 Provider
+              接入留到显式配置后执行。
+            </p>
+          </div>
+          <span>{ttsPlan.data?.costStrategy ?? '本地/免费优先'}</span>
+        </div>
+        {ttsPlan.data ? (
+          <>
+            <div className="tts-provider-grid">
+              {ttsPlan.data.providerOptions.map((provider) => (
+                <article key={provider.id}>
+                  <span>
+                    {provider.mode} · {provider.risk}
+                  </span>
+                  <strong>{provider.label}</strong>
+                  <p>{provider.setup}</p>
+                  <small>{provider.status}</small>
+                </article>
+              ))}
+            </div>
+            <div className="storyboard-export-columns">
+              <article>
+                <h3>角色声线准备</h3>
+                <ul>
+                  {ttsPlan.data.voiceReadiness.map((voice) => (
+                    <li key={voice.characterId}>
+                      {voice.name} · {voice.sampleCount}/10 · {voice.status}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+              <article>
+                <h3>音频素材边界</h3>
+                <ul>
+                  {ttsPlan.data.audioLibrary.boundaries.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+                <small>{ttsPlan.data.audioLibrary.suggestedPath}</small>
+              </article>
+            </div>
+            <div className="tts-queue">
+              {ttsPlan.data.dubbingQueue.map((item) => (
+                <article key={item.shotId}>
+                  <div>
+                    <strong>
+                      {item.sortOrder + 1}. {item.title}
+                    </strong>
+                    <small>
+                      {Math.round(item.durationMs / 1000)}s · {item.preferredVoice} · {item.status}
+                    </small>
+                    <p>{item.narration || '此镜头暂无旁白文本。'}</p>
+                  </div>
+                  <button
+                    className="button button--quiet"
+                    disabled={!item.narration}
+                    onClick={() => speakPreview(item.narration)}
+                  >
+                    浏览器试听
+                  </button>
+                </article>
+              ))}
+              {!ttsPlan.data.dubbingQueue.length ? (
+                <p className="notice">先生成分镜后再生成配音队列。</p>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <p className="notice">正在准备 TTS 配音计划。</p>
+        )}
+      </section>
     </main>
   );
 }
@@ -246,4 +326,13 @@ function findShotAsset(board: Storyboard | null | undefined, assets: Asset[], in
     assets.find((asset) => asset.storyNodeId === shot.storyNodeId && asset.kind === 'scene') ??
     null
   );
+}
+
+function speakPreview(text: string) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 0.92;
+  utterance.pitch = 1;
+  window.speechSynthesis.speak(utterance);
 }

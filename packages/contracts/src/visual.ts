@@ -133,6 +133,51 @@ export const storyboardExportPlanSchema = z.object({
     }),
   ),
 });
+export const ttsDubbingPlanSchema = z.object({
+  projectId: id,
+  storyboardId: id.nullable(),
+  generatedAt: z.iso.datetime(),
+  costStrategy: z.string(),
+  providerOptions: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      mode: z.enum(['browser', 'local', 'self-hosted', 'paid']),
+      status: z.enum(['available', 'planned', 'deferred']),
+      setup: z.string(),
+      risk: z.enum(['free', 'low', 'paid', 'unknown']),
+      notes: z.array(z.string()),
+    }),
+  ),
+  voiceReadiness: z.array(
+    z.object({
+      characterId: id,
+      name: z.string(),
+      hasVoiceSamples: z.boolean(),
+      sampleCount: z.number().int().min(0),
+      previewText: z.string(),
+      status: z.enum(['ready', 'needs-samples']),
+    }),
+  ),
+  dubbingQueue: z.array(
+    z.object({
+      shotId: id,
+      sortOrder: z.number().int(),
+      title: z.string(),
+      durationMs: z.number().int(),
+      narration: z.string(),
+      preferredVoice: z.string(),
+      status: z.enum(['ready', 'needs-voice', 'needs-storyboard']),
+      audioAssetId: id.nullable(),
+    }),
+  ),
+  audioLibrary: z.object({
+    status: z.enum(['planned', 'ready']),
+    suggestedPath: z.string(),
+    artifactTypes: z.array(z.string()),
+    boundaries: z.array(z.string()),
+  }),
+});
 
 export type Scene = z.infer<typeof sceneSchema>;
 export type UpsertSceneInput = z.infer<typeof upsertSceneSchema>;
@@ -142,3 +187,4 @@ export type Asset = z.infer<typeof assetSchema>;
 export type GenerateImageInput = z.infer<typeof generateImageSchema>;
 export type Storyboard = z.infer<typeof storyboardSchema>;
 export type StoryboardExportPlan = z.infer<typeof storyboardExportPlanSchema>;
+export type TtsDubbingPlan = z.infer<typeof ttsDubbingPlanSchema>;

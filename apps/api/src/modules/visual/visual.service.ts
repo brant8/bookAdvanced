@@ -12,6 +12,7 @@ import type {
   Scene,
   Storyboard,
   StoryboardExportPlan,
+  TtsDubbingPlan,
   UpsertSceneInput,
 } from '@storyverse/contracts';
 
@@ -399,6 +400,19 @@ export class VisualService {
     return buildStoryboardExportPlan(storyboard, await this.listAssets(projectId));
   }
 
+  async getTtsDubbingPlan(projectId: string): Promise<TtsDubbingPlan> {
+    await this.assertProject(projectId);
+    const [storyboard, characterRows] = await Promise.all([
+      this.getStoryboard(projectId),
+      this.db
+        .select()
+        .from(characters)
+        .where(eq(characters.projectId, projectId))
+        .orderBy(asc(characters.name)),
+    ]);
+    return buildTtsDubbingPlan(projectId, storyboard, characterRows);
+  }
+
   private async ownedNode(nodeId: string) {
     const [node] = await this.db
       .select()
@@ -545,5 +559,97 @@ export function buildStoryboardExportPlan(
       resolution: '1920x1080',
       status: missingAssetCount ? 'blocked' : 'planned',
     },
+  };
+}
+
+export function buildTtsDubbingPlan(
+  projectId: string,
+  storyboard: Storyboard | null,
+  characterRows: { id: string; name: string; voiceSamples: string[] }[],
+): TtsDubbingPlan {
+  const voiceReadiness = characterRows.map((character) => {
+    const previewText =
+      character.voiceSamples.find((sample) => sample.startsWith('样本：')) ??
+      character.voiceSamples.find((sample) => sample.startsWith('sample:')) ??
+      character.voiceSamples[0] ??
+      `${character.name} 的声音样本尚未配置。`;
+    return {
+      characterId: character.id,
+      hasVoiceSamples: character.voiceSamples.length > 0,
+      name: character.name,
+      previewText,
+      sampleCount: character.voiceSamples.length,
+      status: character.voiceSamples.length > 0 ? ('ready' as const) : ('needs-samples' as const),
+    };
+  });
+  const defaultVoice = voiceReadiness.find((voice) => voice.status === 'ready')?.name ?? '旁白';
+  const hasReadyVoice = voiceReadiness.some((voice) => voice.status === 'ready');
+  const dubbingQueue = (storyboard?.shots ?? []).map((shot) => ({
+    audioAssetId: null,
+    durationMs: shot.durationMs,
+    narration: shot.narration,
+    preferredVoice: defaultVoice,
+    shotId: shot.id,
+    sortOrder: shot.sortOrder,
+    status: hasReadyVoice ? ('ready' as const) : ('needs-voice' as const),
+    title: shot.title,
+  }));
+  return {
+    audioLibrary: {
+      artifactTypes: ['narration-wav', 'dialogue-wav', 'sfx-wav', 'music-bed', 'mixdown-preview'],
+      boundaries: [
+        'T-035 does not persist audio files or introduce a new audio table.',
+        'Generated audio should later be stored under local/NAS assets before video muxing.',
+        'Provider-specific voice cloning, consent rules and cost limits must be configured before real rendering.',
+      ],
+      status: 'planned',
+      suggestedPath: '/data/audio/storyboard',
+    },
+    costStrategy:
+      'Default to browser SpeechSynthesis for preview, then local/self-hosted TTS before any paid provider.',
+    dubbingQueue,
+    generatedAt: new Date().toISOString(),
+    projectId,
+    providerOptions: [
+      {
+        id: 'browser-speech-synthesis',
+        label: 'Browser SpeechSynthesis preview',
+        mode: 'browser',
+        notes: [
+          'Runs in the browser and is suitable for quick timing checks.',
+          'Voice quality depends on the operating system and installed voices.',
+          'No API key, no server call and no external cost.',
+        ],
+        risk: 'free',
+        setup: 'Use the browser built-in speechSynthesis API.',
+        status: 'available',
+      },
+      {
+        id: 'local-open-tts',
+        label: 'Local open-source TTS',
+        mode: 'local',
+        notes: [
+          'Can run on the author machine or NAS when resources allow.',
+          'Recommended before paid cloud TTS for privacy and cost control.',
+        ],
+        risk: 'low',
+        setup: 'Reserve a future local adapter such as Piper or compatible HTTP TTS.',
+        status: 'planned',
+      },
+      {
+        id: 'paid-cloud-tts',
+        label: 'Paid cloud TTS',
+        mode: 'paid',
+        notes: [
+          'Deferred until there is budget and explicit provider configuration.',
+          'Must expose per-run cost warnings and model selection before rendering.',
+        ],
+        risk: 'paid',
+        setup: 'Add a dedicated TTS provider type after local preview workflow is proven.',
+        status: 'deferred',
+      },
+    ],
+    storyboardId: storyboard?.id ?? null,
+    voiceReadiness,
   };
 }
