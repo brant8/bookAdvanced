@@ -86,6 +86,53 @@ export const storyboardSchema = z.object({
 export const generateStoryboardSchema = z.object({
   providerId: id.optional(),
 });
+export const storyboardExportPlanSchema = z.object({
+  projectId: id,
+  storyboardId: id,
+  generatedAt: z.iso.datetime(),
+  totalDurationMs: z.number().int().min(0),
+  frameRate: z.number().int().min(1),
+  estimatedFrameCount: z.number().int().min(0),
+  missingAssetCount: z.number().int().min(0),
+  browserPreview: z.object({
+    available: z.boolean(),
+    output: z.string(),
+    notes: z.array(z.string()),
+  }),
+  nasWorker: z.object({
+    required: z.boolean(),
+    queueName: z.string(),
+    suggestedMounts: z.array(z.string()),
+    steps: z.array(z.string()),
+  }),
+  videoExport: z.object({
+    status: z.enum(['planned', 'blocked', 'ready']),
+    container: z.string(),
+    codec: z.string(),
+    resolution: z.string(),
+    fps: z.number().int().min(1),
+    boundaries: z.array(z.string()),
+  }),
+  audioMix: z.object({
+    status: z.enum(['planned', 'blocked', 'ready']),
+    tracks: z.array(z.string()),
+    boundaries: z.array(z.string()),
+  }),
+  shots: z.array(
+    z.object({
+      shotId: id,
+      sortOrder: z.number().int(),
+      title: z.string(),
+      durationMs: z.number().int(),
+      storyNodeId: id.nullable(),
+      assetId: id.nullable(),
+      hasVisualAsset: z.boolean(),
+      visualPrompt: z.string(),
+      narration: z.string(),
+      estimatedFrameCount: z.number().int().min(0),
+    }),
+  ),
+});
 
 export type Scene = z.infer<typeof sceneSchema>;
 export type UpsertSceneInput = z.infer<typeof upsertSceneSchema>;
@@ -94,3 +141,4 @@ export type CreateCharacterAbilityInput = z.infer<typeof createCharacterAbilityS
 export type Asset = z.infer<typeof assetSchema>;
 export type GenerateImageInput = z.infer<typeof generateImageSchema>;
 export type Storyboard = z.infer<typeof storyboardSchema>;
+export type StoryboardExportPlan = z.infer<typeof storyboardExportPlanSchema>;

@@ -3,6 +3,7 @@ import {
   characterAbilitySchema,
   sceneSchema,
   storyboardSchema,
+  storyboardExportPlanSchema,
   type CreateCharacterAbilityInput,
   type GenerateImageInput,
   type UpsertSceneInput,
@@ -65,6 +66,10 @@ export const visualApi = {
   getStoryboard: async (projectId: string) => {
     const value = await apiRequest(`/projects/${projectId}/storyboard`);
     return value === null ? null : storyboardSchema.parse(value);
+  },
+  getStoryboardExportPlan: async (projectId: string) => {
+    const value = await apiRequest(`/projects/${projectId}/storyboard/export-plan`);
+    return value === null ? null : storyboardExportPlanSchema.parse(value);
   },
   generateStoryboard: async (projectId: string, providerId?: string) =>
     storyboardSchema.parse(

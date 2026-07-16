@@ -11,6 +11,7 @@ import type {
   GenerateImageInput,
   Scene,
   Storyboard,
+  StoryboardExportPlan,
   UpsertSceneInput,
 } from '@storyverse/contracts';
 
@@ -392,6 +393,12 @@ export class VisualService {
     return dto({ ...board, shots });
   }
 
+  async getStoryboardExportPlan(projectId: string): Promise<StoryboardExportPlan | null> {
+    const storyboard = await this.getStoryboard(projectId);
+    if (!storyboard) return null;
+    return buildStoryboardExportPlan(storyboard, await this.listAssets(projectId));
+  }
+
   private async ownedNode(nodeId: string) {
     const [node] = await this.db
       .select()
@@ -456,4 +463,87 @@ function parseShotDrafts(value: string) {
       visualPrompt: String(shot.visualPrompt ?? ''),
     };
   });
+}
+
+export function buildStoryboardExportPlan(
+  storyboard: Storyboard,
+  assetList: Asset[],
+): StoryboardExportPlan {
+  const frameRate = 24;
+  const shots = storyboard.shots.map((shot) => {
+    const hasVisualAsset = Boolean(
+      shot.assetId
+        ? assetList.some((asset) => asset.id === shot.assetId)
+        : assetList.some(
+            (asset) => asset.storyNodeId === shot.storyNodeId && asset.kind === 'scene',
+          ),
+    );
+    return {
+      assetId: shot.assetId,
+      durationMs: shot.durationMs,
+      estimatedFrameCount: Math.ceil((shot.durationMs / 1000) * frameRate),
+      hasVisualAsset,
+      narration: shot.narration,
+      shotId: shot.id,
+      sortOrder: shot.sortOrder,
+      storyNodeId: shot.storyNodeId,
+      title: shot.title,
+      visualPrompt: shot.visualPrompt,
+    };
+  });
+  const totalDurationMs = shots.reduce((total, shot) => total + shot.durationMs, 0);
+  const missingAssetCount = shots.filter((shot) => !shot.hasVisualAsset).length;
+  return {
+    audioMix: {
+      boundaries: [
+        'T-034 only defines narration, SFX and music lanes; no audio file is rendered yet.',
+        'TTS provider selection, voice sample playback and audio asset storage belong to T-035.',
+        'Final loudness normalization and muxing should run in the NAS Worker stage.',
+      ],
+      status: 'planned',
+      tracks: ['narration', 'character-dialogue', 'sfx', 'music-bed'],
+    },
+    browserPreview: {
+      available: true,
+      notes: [
+        'Uses the existing CSS paper-cut player and TimelineRail playhead.',
+        'Safe for local preview because it does not invoke image, TTS or video providers.',
+        missingAssetCount
+          ? 'Some shots still fall back to visual prompts because bound scene assets are missing.'
+          : 'Every shot has a visual asset candidate.',
+      ],
+      output: 'interactive-html-preview',
+    },
+    estimatedFrameCount: Math.ceil((totalDurationMs / 1000) * frameRate),
+    frameRate,
+    generatedAt: new Date().toISOString(),
+    missingAssetCount,
+    nasWorker: {
+      queueName: 'storyboard-export',
+      required: true,
+      steps: [
+        'Read storyboard export plan and resolve bound assets from local/NAS storage.',
+        'Render image sequence from shot durations, transitions and paper-cut layers.',
+        'Render or import narration/audio tracks after TTS provider is configured.',
+        'Mux video and audio, write output to NAS export directory, then persist artifact metadata.',
+      ],
+      suggestedMounts: ['/data/uploads', '/data/exports', '/data/tmp/storyboard-render'],
+    },
+    projectId: storyboard.projectId,
+    shots,
+    storyboardId: storyboard.id,
+    totalDurationMs,
+    videoExport: {
+      boundaries: [
+        'No FFmpeg dependency is added to the web or API container in T-034.',
+        'Browser preview is not treated as production video output.',
+        'Actual MP4/WebM rendering should run as an optional NAS Worker capability.',
+      ],
+      codec: 'h264-or-vp9-worker-selected',
+      container: 'mp4-or-webm',
+      fps: frameRate,
+      resolution: '1920x1080',
+      status: missingAssetCount ? 'blocked' : 'planned',
+    },
+  };
 }

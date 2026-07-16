@@ -23,6 +23,11 @@ export function StoryboardPage() {
     queryFn: () => visualApi.listAssets(projectId),
     queryKey: ['assets', projectId],
   });
+  const exportPlan = useQuery({
+    enabled: Boolean(board.data),
+    queryFn: () => visualApi.getStoryboardExportPlan(projectId),
+    queryKey: ['storyboard-export-plan', projectId],
+  });
   const providers = useQuery({
     queryFn: aiSettingsApi.listProviders,
     queryKey: ['ai-providers'],
@@ -31,7 +36,10 @@ export function StoryboardPage() {
   const [providerId, setProviderId] = useState('');
   const generate = useMutation({
     mutationFn: () => visualApi.generateStoryboard(projectId, providerId || undefined),
-    onSuccess: (value) => queryClient.setQueryData(['storyboard', projectId], value),
+    onSuccess: async (value) => {
+      queryClient.setQueryData(['storyboard', projectId], value);
+      await queryClient.invalidateQueries({ queryKey: ['storyboard-export-plan', projectId] });
+    },
   });
   const [playing, setPlaying] = useState(false);
   const [index, setIndex] = useState(0);
@@ -151,6 +159,76 @@ export function StoryboardPage() {
           </button>
         ))}
       </div>
+      <section className="panel storyboard-export-panel">
+        <div className="section-heading">
+          <div>
+            <h2>分镜导出规划</h2>
+            <p>
+              当前阶段只生成可审查的导出清单：浏览器负责低成本预览，真正视频导出、音频混流和批量渲染留给
+              NAS Worker。
+            </p>
+          </div>
+          <span>
+            {exportPlan.data
+              ? `${Math.round(exportPlan.data.totalDurationMs / 1000)}s`
+              : '待生成分镜'}
+          </span>
+        </div>
+        {exportPlan.data ? (
+          <>
+            <div className="storyboard-export-grid">
+              <article>
+                <span>浏览器预览</span>
+                <strong>{exportPlan.data.browserPreview.available ? '可用' : '不可用'}</strong>
+                <p>{exportPlan.data.browserPreview.output}</p>
+              </article>
+              <article>
+                <span>估算帧数</span>
+                <strong>{exportPlan.data.estimatedFrameCount}</strong>
+                <p>
+                  {exportPlan.data.frameRate} fps · {exportPlan.data.videoExport.resolution}
+                </p>
+              </article>
+              <article>
+                <span>缺失素材</span>
+                <strong>{exportPlan.data.missingAssetCount}</strong>
+                <p>
+                  {exportPlan.data.missingAssetCount ? '需要先补场景图或镜头图' : '视觉素材已覆盖'}
+                </p>
+              </article>
+              <article>
+                <span>视频导出</span>
+                <strong>{exportPlan.data.videoExport.status}</strong>
+                <p>
+                  {exportPlan.data.videoExport.container} · {exportPlan.data.videoExport.codec}
+                </p>
+              </article>
+            </div>
+            <div className="storyboard-export-columns">
+              <article>
+                <h3>NAS Worker 边界</h3>
+                <ul>
+                  {exportPlan.data.nasWorker.steps.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+                <small>{exportPlan.data.nasWorker.suggestedMounts.join(' · ')}</small>
+              </article>
+              <article>
+                <h3>音频混流边界</h3>
+                <ul>
+                  {exportPlan.data.audioMix.boundaries.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+                <small>{exportPlan.data.audioMix.tracks.join(' · ')}</small>
+              </article>
+            </div>
+          </>
+        ) : (
+          <p className="notice">先生成分镜后再查看导出规划。</p>
+        )}
+      </section>
     </main>
   );
 }

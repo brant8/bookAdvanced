@@ -2014,6 +2014,63 @@ button {
   color: var(--text-primary);
 }
 
+.storyboard-export-panel {
+  background: linear-gradient(135deg, rgb(124 106 247 / 7%), transparent 44%), var(--bg-secondary);
+}
+
+.storyboard-export-panel .section-heading p {
+  max-width: 72ch;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.storyboard-export-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.storyboard-export-grid article,
+.storyboard-export-columns article {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.storyboard-export-grid span,
+.storyboard-export-columns small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.storyboard-export-grid strong {
+  display: block;
+  margin: 8px 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 1.4rem;
+}
+
+.storyboard-export-grid p,
+.storyboard-export-columns li {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+.storyboard-export-columns {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.storyboard-export-columns ul {
+  margin: 10px 0;
+  padding-left: 18px;
+}
+
 @keyframes storyboard-fade {
   from {
     opacity: 0;
@@ -2163,6 +2220,8 @@ button {
   .timeline-workbench,
   .asset-toolbar,
   .asset-gap-grid,
+  .storyboard-export-grid,
+  .storyboard-export-columns,
   .voice-workbench__grid {
     grid-template-columns: 1fr;
   }
