@@ -43,6 +43,13 @@
       "when": 1781476984815,
       "tag": "0005_unusual_lady_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784102400000,
+      "tag": "0006_add_asset_ability_binding",
+      "breakpoints": true
     }
   ]
 }

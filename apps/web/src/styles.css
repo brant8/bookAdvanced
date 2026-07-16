@@ -1728,6 +1728,71 @@ button {
   font-size: 1.55rem;
 }
 
+.asset-gap-panel {
+  background: linear-gradient(135deg, rgb(255 209 102 / 6%), transparent 42%), var(--bg-secondary);
+}
+
+.asset-gap-panel .section-heading p {
+  max-width: 72ch;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.asset-gap-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.asset-gap-grid article,
+.prompt-queue article {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.asset-gap-grid span,
+.prompt-queue small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.asset-gap-grid strong {
+  display: block;
+  margin: 8px 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 1.7rem;
+}
+
+.asset-gap-grid p,
+.prompt-queue p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+.prompt-queue {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.prompt-queue article {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.prompt-queue strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
 .ai-candidate-panel {
   margin-bottom: 16px;
   background: linear-gradient(135deg, rgb(78 205 196 / 6%), transparent 42%), var(--bg-panel);
@@ -2097,7 +2162,12 @@ button {
 
   .timeline-workbench,
   .asset-toolbar,
+  .asset-gap-grid,
   .voice-workbench__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .prompt-queue article {
     grid-template-columns: 1fr;
   }
 

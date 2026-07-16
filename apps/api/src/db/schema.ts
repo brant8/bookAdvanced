@@ -475,9 +475,13 @@ export const assets = pgTable(
     prompt: text('prompt').notNull().default(''),
     characterId: uuid('character_id').references(() => characters.id, { onDelete: 'set null' }),
     storyNodeId: uuid('story_node_id').references(() => storyNodes.id, { onDelete: 'set null' }),
+    abilityId: uuid('ability_id').references(() => characterAbilities.id, { onDelete: 'set null' }),
     ...timestamps,
   },
-  (table) => [index('assets_project_id_idx').on(table.projectId)],
+  (table) => [
+    index('assets_project_id_idx').on(table.projectId),
+    index('assets_ability_id_idx').on(table.abilityId),
+  ],
 );
 
 export const storyboards = pgTable('storyboards', {

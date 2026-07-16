@@ -48,11 +48,13 @@ export function createVisualRoutes(service: VisualService) {
     const name = form.get('name');
     const characterId = form.get('characterId');
     const storyNodeId = form.get('storyNodeId');
+    const abilityId = form.get('abilityId');
     if (!(file instanceof File) || !kind.success || typeof name !== 'string') {
       return error(context, 400, 'Invalid asset upload.');
     }
     return context.json(
       await service.upload(params.data.projectId, file, {
+        abilityId: typeof abilityId === 'string' && abilityId ? abilityId : undefined,
         characterId: typeof characterId === 'string' && characterId ? characterId : undefined,
         kind: kind.data,
         name,

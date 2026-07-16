@@ -41,12 +41,13 @@ export const visualApi = {
     file: File,
     name: string,
     kind: string,
-    links?: { characterId?: string; storyNodeId?: string },
+    links?: { abilityId?: string; characterId?: string; storyNodeId?: string },
   ) => {
     const form = new FormData();
     form.set('file', file);
     form.set('name', name);
     form.set('kind', kind);
+    if (links?.abilityId) form.set('abilityId', links.abilityId);
     if (links?.characterId) form.set('characterId', links.characterId);
     if (links?.storyNodeId) form.set('storyNodeId', links.storyNodeId);
     return assetSchema.parse(

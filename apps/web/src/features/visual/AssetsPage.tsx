@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Character, CharacterAbility, StoryNode } from '@storyverse/contracts';
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 
@@ -7,6 +8,15 @@ import { aiSettingsApi } from '../workspace/aiSettingsApi';
 import { visualApi } from './visualApi';
 
 type PipelineTarget = 'character' | 'scene' | 'ability' | 'reference';
+type PromptQueueItem = {
+  id: string;
+  target: PipelineTarget;
+  title: string;
+  prompt: string;
+  characterId?: string;
+  storyNodeId?: string;
+  abilityId?: string;
+};
 
 const targetKind = {
   ability: 'prop',
@@ -50,6 +60,8 @@ export function AssetsPage() {
   const selectedCharacter = characters.data?.find((item) => item.id === characterId);
   const selectedNode = nodes.data?.find((item) => item.id === storyNodeId);
   const selectedAbility = abilities.data?.find((item) => item.id === abilityId);
+  const abilityNames = new Map((abilities.data ?? []).map((item) => [item.id, item.name]));
+  const linkedAbilityId = target === 'ability' ? abilityId || undefined : undefined;
   const linkedCharacterId =
     target === 'character'
       ? characterId || undefined
@@ -57,6 +69,21 @@ export function AssetsPage() {
         ? selectedAbility?.characterId
         : undefined;
   const linkedStoryNodeId = target === 'scene' ? storyNodeId || undefined : undefined;
+  const missingCharacterAssets = (characters.data ?? []).filter(
+    (character) =>
+      !(assets.data ?? []).some(
+        (asset) => asset.kind === 'character' && asset.characterId === character.id,
+      ),
+  );
+  const missingSceneAssets = (nodes.data ?? []).filter(
+    (node) =>
+      !(assets.data ?? []).some((asset) => asset.kind === 'scene' && asset.storyNodeId === node.id),
+  );
+  const missingAbilityAssets = (abilities.data ?? []).filter(
+    (ability) =>
+      !(assets.data ?? []).some((asset) => asset.kind === 'prop' && asset.abilityId === ability.id),
+  );
+  const [promptQueue, setPromptQueue] = useState<PromptQueueItem[]>([]);
   const assetName = useMemo(
     () =>
       target === 'character'
@@ -72,6 +99,7 @@ export function AssetsPage() {
   const upload = useMutation({
     mutationFn: () =>
       visualApi.uploadAsset(projectId, file!, assetName, targetKind[target], {
+        abilityId: linkedAbilityId,
         characterId: linkedCharacterId,
         storyNodeId: linkedStoryNodeId,
       }),
@@ -81,6 +109,7 @@ export function AssetsPage() {
     mutationFn: () =>
       visualApi.generateImage(projectId, {
         characterId: linkedCharacterId ?? null,
+        abilityId: linkedAbilityId ?? null,
         kind: targetKind[target],
         name: assetName.slice(0, 120),
         prompt,
@@ -91,30 +120,51 @@ export function AssetsPage() {
     onSuccess: refresh,
   });
   const draftPrompt = () => {
-    const character = selectedCharacter
-      ? `角色：${selectedCharacter.name}。简介：${selectedCharacter.bio || '未填写'}。性格：${
-          selectedCharacter.personality || '未填写'
-        }。`
-      : '';
-    const node = selectedNode
-      ? `故事节点：${selectedNode.title}。目标：${selectedNode.nodeGoal || '未填写'}。摘要：${
-          selectedNode.summary || selectedNode.description || '未填写'
-        }。`
-      : '';
-    const ability = selectedAbility
-      ? `技能：${selectedAbility.name} Lv.${selectedAbility.level}。描述：${
-          selectedAbility.description || '未填写'
-        }。`
-      : '';
-    const base =
-      target === 'character'
-        ? `${character} 生成暗夜书房风格的角色设定图，半身像，清晰轮廓，适合小说人物卡。`
-        : target === 'scene'
-          ? `${node} ${character} 生成电影感定格场景图，强调空间层次、情绪氛围、关键道具。`
-          : target === 'ability'
-            ? `${ability} ${character} 生成技能释放瞬间或技能图标，适合后续剪纸动画分层。`
-            : '生成可作为世界观参考的视觉素材，暗色奇幻/科幻质感，保留可复用的设计元素。';
-    setPrompt(`${base} 不要文字水印，不要 UI 边框，画面干净。`);
+    setPrompt(
+      buildVisualPrompt({
+        ability: selectedAbility,
+        character: selectedCharacter,
+        node: selectedNode,
+        target,
+      }),
+    );
+  };
+  const queueMissingPrompts = () => {
+    const queued: PromptQueueItem[] = [
+      ...missingCharacterAssets.map((character) => ({
+        characterId: character.id,
+        id: `character:${character.id}`,
+        prompt: buildVisualPrompt({ character, target: 'character' }),
+        target: 'character' as const,
+        title: `${character.name} 角色设定图`,
+      })),
+      ...missingSceneAssets.map((node) => ({
+        id: `scene:${node.id}`,
+        prompt: buildVisualPrompt({ node, target: 'scene' }),
+        storyNodeId: node.id,
+        target: 'scene' as const,
+        title: `${node.title} 场景定格图`,
+      })),
+      ...missingAbilityAssets.map((ability) => {
+        const character = (characters.data ?? []).find((item) => item.id === ability.characterId);
+        return {
+          abilityId: ability.id,
+          characterId: ability.characterId,
+          id: `ability:${ability.id}`,
+          prompt: buildVisualPrompt({ ability, character, target: 'ability' }),
+          target: 'ability' as const,
+          title: `${ability.name} 技能视觉图`,
+        };
+      }),
+    ];
+    setPromptQueue(queued);
+  };
+  const useQueueItem = (item: PromptQueueItem) => {
+    setTarget(item.target);
+    setCharacterId(item.characterId ?? '');
+    setStoryNodeId(item.storyNodeId ?? '');
+    setAbilityId(item.abilityId ?? '');
+    setPrompt(item.prompt);
   };
 
   return (
@@ -225,6 +275,55 @@ export function AssetsPage() {
         </div>
         {generate.error ? <p className="notice notice--error">{generate.error.message}</p> : null}
       </section>
+      <section className="panel asset-gap-panel">
+        <div className="section-heading">
+          <div>
+            <h2>素材缺口检查</h2>
+            <p>
+              检查角色设定图、场景定格图和技能视觉图是否已经有绑定素材。批量队列只生成提示词草稿，
+              不会自动调用图片 Provider。
+            </p>
+          </div>
+          <button className="button button--quiet" onClick={queueMissingPrompts}>
+            生成缺口提示词队列
+          </button>
+        </div>
+        <div className="asset-gap-grid">
+          <article>
+            <span>缺角色图</span>
+            <strong>{missingCharacterAssets.length}</strong>
+            <p>{missingCharacterAssets.map((item) => item.name).join('、') || '已覆盖'}</p>
+          </article>
+          <article>
+            <span>缺场景图</span>
+            <strong>{missingSceneAssets.length}</strong>
+            <p>{missingSceneAssets.map((item) => item.title).join('、') || '已覆盖'}</p>
+          </article>
+          <article>
+            <span>缺技能图</span>
+            <strong>{missingAbilityAssets.length}</strong>
+            <p>{missingAbilityAssets.map((item) => item.name).join('、') || '已覆盖'}</p>
+          </article>
+        </div>
+        {promptQueue.length > 0 ? (
+          <div className="prompt-queue">
+            {promptQueue.map((item) => (
+              <article key={item.id}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <small>
+                    {targetKind[item.target]} · {item.target}
+                  </small>
+                  <p>{item.prompt.slice(0, 180)}</p>
+                </div>
+                <button className="button button--quiet" onClick={() => useQueueItem(item)}>
+                  载入提示词
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </section>
       <section className="visual-pipeline__summary">
         {(['character', 'scene', 'prop', 'background', 'reference'] as const).map((kind) => (
           <article className="panel" key={kind}>
@@ -242,6 +341,7 @@ export function AssetsPage() {
               {asset.kind} · {asset.source}
               {asset.characterId ? ' · 角色绑定' : ''}
               {asset.storyNodeId ? ' · 节点绑定' : ''}
+              {asset.abilityId ? ` · 技能：${abilityNames.get(asset.abilityId) ?? '已绑定'}` : ''}
             </small>
             {asset.prompt ? <p>{asset.prompt.slice(0, 120)}</p> : null}
             <button
@@ -255,4 +355,39 @@ export function AssetsPage() {
       </div>
     </main>
   );
+}
+
+function buildVisualPrompt({
+  ability,
+  character,
+  node,
+  target,
+}: {
+  ability?: CharacterAbility;
+  character?: Character;
+  node?: StoryNode;
+  target: PipelineTarget;
+}) {
+  const characterText = character
+    ? `角色：${character.name}。简介：${character.bio || '未填写'}。性格：${
+        character.personality || '未填写'
+      }。`
+    : '';
+  const nodeText = node
+    ? `故事节点：${node.title}。目标：${node.nodeGoal || '未填写'}。摘要：${
+        node.summary || node.description || '未填写'
+      }。`
+    : '';
+  const abilityText = ability
+    ? `技能：${ability.name} Lv.${ability.level}。描述：${ability.description || '未填写'}。`
+    : '';
+  const base =
+    target === 'character'
+      ? `${characterText} 生成暗夜书房风格的角色设定图，半身像，清晰轮廓，适合小说人物卡。`
+      : target === 'scene'
+        ? `${nodeText} ${characterText} 生成电影感定格场景图，强调空间层次、情绪氛围、关键道具。`
+        : target === 'ability'
+          ? `${abilityText} ${characterText} 生成技能释放瞬间或技能图标，适合后续剪纸动画分层。`
+          : '生成可作为世界观参考的视觉素材，暗色奇幻/科幻质感，保留可复用的设计元素。';
+  return `${base} 不要文字水印，不要 UI 边框，画面干净。`;
 }

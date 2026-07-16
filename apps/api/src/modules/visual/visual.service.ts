@@ -109,9 +109,16 @@ export class VisualService {
   async upload(
     projectId: string,
     file: File,
-    metadata: { name: string; kind: Asset['kind']; characterId?: string; storyNodeId?: string },
+    metadata: {
+      abilityId?: string;
+      characterId?: string;
+      kind: Asset['kind'];
+      name: string;
+      storyNodeId?: string;
+    },
   ): Promise<Asset> {
     await this.assertProject(projectId);
+    await this.assertAbility(projectId, metadata.abilityId);
     await mkdir(this.uploadDir, { recursive: true });
     const extension = safeExtension(file.name, file.type);
     const fileName = `${randomUUID()}${extension}`;
@@ -133,6 +140,7 @@ export class VisualService {
 
   async generateImage(projectId: string, input: GenerateImageInput): Promise<Asset> {
     await this.assertProject(projectId);
+    await this.assertAbility(projectId, input.abilityId ?? undefined);
     const [provider] = await this.db
       .select()
       .from(aiProviders)
@@ -206,6 +214,7 @@ export class VisualService {
         .insert(assets)
         .values({
           characterId: input.characterId,
+          abilityId: input.abilityId,
           fileName,
           kind: input.kind,
           mimeType,
@@ -401,6 +410,16 @@ export class VisualService {
       .where(and(eq(projects.id, projectId), eq(projects.ownerId, this.ownerId)))
       .limit(1);
     if (!project) throw new CreativeResourceNotFoundError();
+  }
+
+  private async assertAbility(projectId: string, abilityId?: string) {
+    if (!abilityId) return;
+    const [ability] = await this.db
+      .select({ id: characterAbilities.id })
+      .from(characterAbilities)
+      .where(and(eq(characterAbilities.id, abilityId), eq(characterAbilities.projectId, projectId)))
+      .limit(1);
+    if (!ability) throw new CreativeResourceNotFoundError();
   }
 }
 

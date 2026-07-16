@@ -49,6 +49,7 @@ export const assetSchema = z.object({
   prompt: z.string(),
   characterId: id.nullable(),
   storyNodeId: id.nullable(),
+  abilityId: id.nullable(),
   ...timestamps,
 });
 export const generateImageSchema = z.object({
@@ -58,6 +59,7 @@ export const generateImageSchema = z.object({
   kind: assetKindSchema,
   characterId: id.nullable().optional(),
   storyNodeId: id.nullable().optional(),
+  abilityId: id.nullable().optional(),
   size: z.string().default('1024x1024'),
 });
 export const storyboardShotSchema = z.object({

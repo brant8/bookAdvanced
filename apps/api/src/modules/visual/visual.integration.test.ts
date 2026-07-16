@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDatabase } from '../../db/client.js';
 import { getDatabaseUrl } from '../../db/config.js';
-import { characters, projects, storyNodes, users } from '../../db/schema.js';
+import { characterAbilities, characters, projects, storyNodes, users } from '../../db/schema.js';
 import { VisualService } from './visual.service.js';
 
 const { db, pool } = createDatabase(getDatabaseUrl());
@@ -33,6 +33,10 @@ describe('VisualService integration', () => {
       .insert(characters)
       .values({ name: 'Navigator', projectId: project!.id })
       .returning();
+    const [ability] = await db
+      .insert(characterAbilities)
+      .values({ characterId: character!.id, name: 'Star pulse', projectId: project!.id })
+      .returning();
     const service = new VisualService(db, owner!.id, undefined, undefined, uploadDir);
     const scene = await service.upsertScene(node!.id, {
       atmosphere: 'quiet',
@@ -43,8 +47,15 @@ describe('VisualService integration', () => {
     const asset = await service.upload(
       project!.id,
       new File([new Uint8Array([137, 80, 78, 71])], 'test.png', { type: 'image/png' }),
-      { characterId: character!.id, kind: 'scene', name: 'test image', storyNodeId: node!.id },
+      {
+        abilityId: ability!.id,
+        characterId: character!.id,
+        kind: 'scene',
+        name: 'test image',
+        storyNodeId: node!.id,
+      },
     );
+    expect(asset.abilityId).toBe(ability!.id);
     expect(asset.characterId).toBe(character!.id);
     expect(asset.storyNodeId).toBe(node!.id);
     expect((await service.file(asset.id)).bytes.length).toBe(4);
