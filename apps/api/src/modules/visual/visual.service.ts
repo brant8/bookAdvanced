@@ -12,6 +12,7 @@ import type {
   Scene,
   Storyboard,
   StoryboardExportPlan,
+  StoryboardWorkerQueue,
   TtsDubbingPlan,
   UpsertSceneInput,
 } from '@storyverse/contracts';
@@ -413,6 +414,15 @@ export class VisualService {
     return buildTtsDubbingPlan(projectId, storyboard, characterRows);
   }
 
+  async getStoryboardWorkerQueue(projectId: string): Promise<StoryboardWorkerQueue> {
+    await this.assertProject(projectId);
+    const [exportPlan, ttsPlan] = await Promise.all([
+      this.getStoryboardExportPlan(projectId),
+      this.getTtsDubbingPlan(projectId),
+    ]);
+    return buildStoryboardWorkerQueue(projectId, exportPlan, ttsPlan);
+  }
+
   private async ownedNode(nodeId: string) {
     const [node] = await this.db
       .select()
@@ -651,5 +661,105 @@ export function buildTtsDubbingPlan(
     ],
     storyboardId: storyboard?.id ?? null,
     voiceReadiness,
+  };
+}
+
+export function buildStoryboardWorkerQueue(
+  projectId: string,
+  exportPlan: StoryboardExportPlan | null,
+  ttsPlan: TtsDubbingPlan,
+): StoryboardWorkerQueue {
+  const storyboardId = exportPlan?.storyboardId ?? ttsPlan.storyboardId;
+  const rootPath = `/data/tmp/storyboard-render/${projectId}`;
+  const outputPath = `/data/exports/${projectId}`;
+  const missingAssetCount = exportPlan?.missingAssetCount ?? 0;
+  const hasStoryboard = Boolean(storyboardId);
+  const hasDubbingQueue = ttsPlan.dubbingQueue.length > 0;
+  const warnings = [
+    !hasStoryboard
+      ? 'Storyboard is missing; generate storyboard before running export worker.'
+      : '',
+    missingAssetCount > 0 ? `${missingAssetCount} storyboard shots still miss visual assets.` : '',
+    !hasDubbingQueue ? 'Dubbing queue is empty; audio preparation will be skipped.' : '',
+  ].filter(Boolean);
+  const status = warnings.length > 0 ? 'blocked' : 'ready';
+  const prepareId = 'prepare-directories';
+  const resolveId = 'resolve-assets';
+  const framesId = 'render-frame-sequence';
+  const audioId = 'prepare-audio';
+  const muxId = 'mux-preview';
+  const manifestId = 'write-manifest';
+  return {
+    generatedAt: new Date().toISOString(),
+    mode: 'nas-file',
+    outputPath,
+    projectId,
+    queueName: 'storyboard-export',
+    rootPath,
+    status,
+    storyboardId,
+    tasks: [
+      {
+        dependsOn: [],
+        id: prepareId,
+        input: { paths: [rootPath, outputPath] },
+        output: { manifestPath: `${rootPath}/manifest.json` },
+        status: 'ready',
+        title: 'Prepare local/NAS render directories',
+        type: 'prepare-directories',
+      },
+      {
+        dependsOn: [prepareId],
+        id: resolveId,
+        input: { shotCount: exportPlan?.shots.length ?? 0 },
+        output: { assetManifest: `${rootPath}/assets.json` },
+        status: missingAssetCount > 0 || !hasStoryboard ? 'blocked' : 'ready',
+        title: 'Resolve storyboard visual assets',
+        type: 'resolve-assets',
+      },
+      {
+        dependsOn: [resolveId],
+        id: framesId,
+        input: {
+          estimatedFrameCount: exportPlan?.estimatedFrameCount ?? 0,
+          frameRate: exportPlan?.frameRate ?? 24,
+        },
+        output: { frameDirectory: `${rootPath}/frames` },
+        status: missingAssetCount > 0 || !hasStoryboard ? 'blocked' : 'planned',
+        title: 'Render paper-cut frame sequence',
+        type: 'render-frame-sequence',
+      },
+      {
+        dependsOn: [prepareId],
+        id: audioId,
+        input: { queueItems: ttsPlan.dubbingQueue.length, strategy: ttsPlan.costStrategy },
+        output: { audioDirectory: `${rootPath}/audio` },
+        status: hasDubbingQueue ? 'planned' : 'blocked',
+        title: 'Prepare narration and audio lanes',
+        type: 'prepare-audio',
+      },
+      {
+        dependsOn: [framesId, audioId],
+        id: muxId,
+        input: {
+          container: exportPlan?.videoExport.container ?? 'mp4-or-webm',
+          tracks: ttsPlan.audioLibrary.artifactTypes,
+        },
+        output: { previewVideo: `${outputPath}/storyboard-preview.webm` },
+        status: status === 'ready' ? 'planned' : 'blocked',
+        title: 'Mux preview video from frames and audio',
+        type: 'mux-preview',
+      },
+      {
+        dependsOn: [muxId],
+        id: manifestId,
+        input: { queueName: 'storyboard-export' },
+        output: { exportManifest: `${outputPath}/storyboard-export.json` },
+        status: status === 'ready' ? 'planned' : 'blocked',
+        title: 'Write export manifest for future resume',
+        type: 'write-manifest',
+      },
+    ],
+    warnings,
   };
 }

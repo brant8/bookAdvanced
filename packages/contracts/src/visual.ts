@@ -178,6 +178,35 @@ export const ttsDubbingPlanSchema = z.object({
     boundaries: z.array(z.string()),
   }),
 });
+export const storyboardWorkerQueueSchema = z.object({
+  projectId: id,
+  storyboardId: id.nullable(),
+  generatedAt: z.iso.datetime(),
+  queueName: z.string(),
+  mode: z.enum(['local-file', 'nas-file']),
+  status: z.enum(['ready', 'blocked']),
+  rootPath: z.string(),
+  outputPath: z.string(),
+  warnings: z.array(z.string()),
+  tasks: z.array(
+    z.object({
+      id: z.string(),
+      type: z.enum([
+        'prepare-directories',
+        'resolve-assets',
+        'render-frame-sequence',
+        'prepare-audio',
+        'mux-preview',
+        'write-manifest',
+      ]),
+      title: z.string(),
+      status: z.enum(['ready', 'blocked', 'planned']),
+      input: z.record(z.string(), z.unknown()),
+      output: z.record(z.string(), z.unknown()),
+      dependsOn: z.array(z.string()),
+    }),
+  ),
+});
 
 export type Scene = z.infer<typeof sceneSchema>;
 export type UpsertSceneInput = z.infer<typeof upsertSceneSchema>;
@@ -188,3 +217,4 @@ export type GenerateImageInput = z.infer<typeof generateImageSchema>;
 export type Storyboard = z.infer<typeof storyboardSchema>;
 export type StoryboardExportPlan = z.infer<typeof storyboardExportPlanSchema>;
 export type TtsDubbingPlan = z.infer<typeof ttsDubbingPlanSchema>;
+export type StoryboardWorkerQueue = z.infer<typeof storyboardWorkerQueueSchema>;

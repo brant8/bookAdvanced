@@ -2135,6 +2135,59 @@ button {
   color: var(--text-primary);
 }
 
+.worker-queue-panel {
+  background: linear-gradient(135deg, rgb(255 209 102 / 7%), transparent 44%), var(--bg-secondary);
+}
+
+.worker-queue-panel .section-heading p {
+  max-width: 72ch;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.worker-queue-summary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.worker-queue-summary article,
+.worker-task-list article {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.worker-queue-summary span,
+.worker-task-list small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.worker-queue-summary strong,
+.worker-task-list strong {
+  display: block;
+  margin: 7px 0;
+  color: var(--text-primary);
+}
+
+.worker-queue-summary p,
+.worker-task-list p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1.55;
+  word-break: break-all;
+}
+
+.worker-task-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 @keyframes storyboard-fade {
   from {
     opacity: 0;
@@ -2287,6 +2340,7 @@ button {
   .storyboard-export-grid,
   .storyboard-export-columns,
   .tts-provider-grid,
+  .worker-queue-summary,
   .voice-workbench__grid {
     grid-template-columns: 1fr;
   }

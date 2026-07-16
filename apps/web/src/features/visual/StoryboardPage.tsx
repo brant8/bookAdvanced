@@ -32,6 +32,10 @@ export function StoryboardPage() {
     queryFn: () => visualApi.getTtsDubbingPlan(projectId),
     queryKey: ['storyboard-tts-plan', projectId],
   });
+  const workerQueue = useQuery({
+    queryFn: () => visualApi.getStoryboardWorkerQueue(projectId),
+    queryKey: ['storyboard-worker-queue', projectId],
+  });
   const providers = useQuery({
     queryFn: aiSettingsApi.listProviders,
     queryKey: ['ai-providers'],
@@ -307,6 +311,59 @@ export function StoryboardPage() {
           </>
         ) : (
           <p className="notice">正在准备 TTS 配音计划。</p>
+        )}
+      </section>
+      <section className="panel worker-queue-panel">
+        <div className="section-heading">
+          <div>
+            <h2>导出 Worker 队列</h2>
+            <p>
+              这是给本地/NAS Worker
+              读取的文件任务清单雏形；当前页面只规划任务，不启动后台进程、不写视频文件。
+            </p>
+          </div>
+          <span>
+            {workerQueue.data ? `${workerQueue.data.mode} · ${workerQueue.data.status}` : '准备中'}
+          </span>
+        </div>
+        {workerQueue.data ? (
+          <>
+            <div className="worker-queue-summary">
+              <article>
+                <span>任务队列</span>
+                <strong>{workerQueue.data.queueName}</strong>
+                <p>{workerQueue.data.rootPath}</p>
+              </article>
+              <article>
+                <span>导出目录</span>
+                <strong>{workerQueue.data.tasks.length}</strong>
+                <p>{workerQueue.data.outputPath}</p>
+              </article>
+              <article>
+                <span>阻塞项</span>
+                <strong>{workerQueue.data.warnings.length}</strong>
+                <p>{workerQueue.data.warnings.join(' / ') || '队列可进入后续 Worker 实现'}</p>
+              </article>
+            </div>
+            <div className="worker-task-list">
+              {workerQueue.data.tasks.map((task) => (
+                <article key={task.id}>
+                  <div>
+                    <small>
+                      {task.type} · {task.status}
+                    </small>
+                    <strong>{task.title}</strong>
+                    <p>
+                      depends on {task.dependsOn.length ? task.dependsOn.join(', ') : 'nothing'} ·
+                      output {Object.values(task.output).join(', ')}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="notice">正在生成 Worker 队列。</p>
         )}
       </section>
     </main>
